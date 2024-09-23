@@ -41,5 +41,10 @@ protected:
   unsigned _component;
   bool _integrate_p_by_parts;
   bool _supg;
+  bool _multiphase;
   const Function & _ffn;
+  const VariableGradient & _grad_c; // c is the order parameter 
+  const VariableValue & _w;  // w is the chemical potential
+  unsigned int _c_var;
+  unsigned int _w_var;
 };

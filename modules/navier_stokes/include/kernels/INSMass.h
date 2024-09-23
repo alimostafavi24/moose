@@ -37,7 +37,10 @@ protected:
   virtual Real computeQpPGOffDiagJacobian(unsigned comp);
 
   bool _pspg;
+  bool _multiphase; // New parameter for multiphase consideration
   const Function & _x_ffn;
   const Function & _y_ffn;
   const Function & _z_ffn;
+  const VariableGradient & _grad_c; // c is the order parameter 
+  const VariableValue & _w;  // w is the chemical potential
 };
