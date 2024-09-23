@@ -22,19 +22,26 @@ INSMass::validParams()
                              "equation.");
   params.addParam<bool>(
       "pspg", false, "Whether to perform PSPG stabilization of the mass equation");
+ params.addParam<bool>(
+      "multiphase", false, "Whether to include multiphase flow terms"); // New parameter
   params.addParam<FunctionName>("x_vel_forcing_func", 0, "The x-velocity mms forcing function.");
   params.addParam<FunctionName>("y_vel_forcing_func", 0, "The y-velocity mms forcing function.");
   params.addParam<FunctionName>("z_vel_forcing_func", 0, "The z-velocity mms forcing function.");
+  params.addCoupledVar("c", "The order parameter");
+  params.addCoupledVar("w", "The chemical potential");
+
   return params;
 }
 
 INSMass::INSMass(const InputParameters & parameters)
   : INSBase(parameters),
     _pspg(getParam<bool>("pspg")),
+    _multiphase(getParam<bool>("multiphase")), // Initialize the new parameter
     _x_ffn(getFunction("x_vel_forcing_func")),
     _y_ffn(getFunction("y_vel_forcing_func")),
-    _z_ffn(getFunction("z_vel_forcing_func"))
-
+    _z_ffn(getFunction("z_vel_forcing_func")),
+    _grad_c(coupledGradient("c")),
+    _w(coupledValue("w"))
 {
 }
 
@@ -66,6 +73,12 @@ INSMass::computeQpPGResidual()
                             _y_ffn.value(_t, _q_point[_qp]),
                             _z_ffn.value(_t, _q_point[_qp])));
 
+             if (_multiphase)
+  {
+
+    r +=   -1. / _rho[_qp] * tau() * _grad_test[_i][_qp] * _w[_qp] * _grad_c[_qp] * -1;
+  }
+
   return r;
 }
 
@@ -75,7 +88,7 @@ INSMass::computeQpJacobian()
   // Derivative wrt to p is zero
   Real r = 0;
 
-  // Unless we are doing GLS stabilization
+  // Unless we are doing PSPG stabilization
   if (_pspg)
     r += computeQpPGJacobian();
 
@@ -89,7 +102,7 @@ INSMass::computeQpPGJacobian()
 }
 
 Real
-INSMass::computeQpOffDiagJacobian(unsigned jvar)
+INSMass::computeQpOffDiagJacobian(const unsigned int jvar)
 {
   if (jvar == _u_vel_var_number)
   {
@@ -120,7 +133,7 @@ INSMass::computeQpOffDiagJacobian(unsigned jvar)
 }
 
 Real
-INSMass::computeQpPGOffDiagJacobian(unsigned comp)
+INSMass::computeQpPGOffDiagJacobian(const unsigned int comp)
 {
   RealVectorValue convective_term = _convective_term ? convectiveTerm() : RealVectorValue(0, 0, 0);
   RealVectorValue d_convective_term_d_u_comp =
@@ -134,7 +147,7 @@ INSMass::computeQpPGOffDiagJacobian(unsigned comp)
   RealVectorValue d_transient_term_d_u_comp =
       _transient_term ? dTimeDerivativeDUComp(comp) : RealVectorValue(0, 0, 0);
 
-  return -1. / _rho[_qp] * tau() * _grad_test[_i][_qp] *
+Real r = -1. / _rho[_qp] * tau() * _grad_test[_i][_qp] *
              (d_convective_term_d_u_comp + d_viscous_term_d_u_comp + d_transient_term_d_u_comp) -
          1. / _rho[_qp] * dTauDUComp(comp) * _grad_test[_i][_qp] *
              (convective_term + viscous_term + transient_term + strongPressureTerm() +
@@ -142,4 +155,13 @@ INSMass::computeQpPGOffDiagJacobian(unsigned comp)
               RealVectorValue(_x_ffn.value(_t, _q_point[_qp]),
                               _y_ffn.value(_t, _q_point[_qp]),
                               _z_ffn.value(_t, _q_point[_qp])));
+
+                          if (_multiphase)
+  {
+
+    r +=   -1. / _rho[_qp] * dTauDUComp(comp) * _grad_test[_i][_qp] * _w[_qp] * _grad_c[_qp] * -1;
+  }
+  return r;
+
+
 }
