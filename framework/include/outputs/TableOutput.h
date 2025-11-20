@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -29,6 +29,9 @@ class TableOutput : public AdvancedOutput
 {
 public:
   static InputParameters validParams();
+  /// Adds the exec flag MULTIAPP_FIXED_POINT_ITERATION_END to a parameter
+  static void addMultiAppFixedPointIterationEndExecFlag(InputParameters & params,
+                                                        const std::string & param);
 
   /**
    * Class constructor.
@@ -50,6 +53,22 @@ protected:
    * Populates the tables with postprocessor values
    */
   virtual void outputPostprocessors() override;
+
+  /**
+   * Checks to see if a new postprocessor row should be added
+   *
+   * @param[in] table  Table to add row to
+   */
+  bool shouldOutputPostprocessorsRow(const FormattedTable & table);
+
+  /**
+   * Outputs a new postprocessor row.
+   *
+   * This should be called only if shouldOutputPostprocessorRow() returns true.
+   *
+   * @param[out] table  Table to add row to
+   */
+  void outputPostprocessorsRow(FormattedTable & table);
 
   /**
    * Populates the tables with Reporter values
@@ -84,6 +103,9 @@ protected:
   /// Table containing postprocessor values, scalar aux variables, and Real Reporters
   FormattedTable & _all_data_table;
 
+  /// If true, new postprocessor rows can be added if any column has a new value
+  const bool _check_all_columns_for_new_row;
+
   /// Tolerance used when deciding whether or not to add a new row to the table
   const Real _new_row_tol;
 
@@ -102,13 +124,15 @@ TableOutput::outputReporter(const ReporterName & name)
 
   if (_reporter_data.hasReporterValue<T>(name))
   {
-    if (_reporter_table.empty() ||
-        !MooseUtils::absoluteFuzzyEqual(_reporter_table.getLastTime(), time(), _new_row_tol))
-      _reporter_table.addRow(time());
+    if (_reporter_table.empty() || !MooseUtils::absoluteFuzzyEqual(_reporter_table.getLastTime(),
+                                                                   getOutputTime(),
+                                                                   _new_row_tol))
+      _reporter_table.addRow(getOutputTime());
 
-    if (_all_data_table.empty() ||
-        !MooseUtils::absoluteFuzzyEqual(_all_data_table.getLastTime(), time(), _new_row_tol))
-      _all_data_table.addRow(time());
+    if (_all_data_table.empty() || !MooseUtils::absoluteFuzzyEqual(_all_data_table.getLastTime(),
+                                                                   getOutputTime(),
+                                                                   _new_row_tol))
+      _all_data_table.addRow(getOutputTime());
 
     const T & value = _reporter_data.getReporterValue<T>(name);
     _reporter_table.addData<T>(name.getCombinedName(), value);

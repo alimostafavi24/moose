@@ -9,9 +9,6 @@ rho = 1
   ymax = 4.1
   elem_type = TRI3
   dim = 2
-[]
-
-[Problem]
   coord_type = 'RZ'
 []
 
@@ -21,26 +18,28 @@ rho = 1
 
     density = 'rho'
     dynamic_viscosity = 'mu'
-    porosity = 'porosity'
 
     initial_velocity = '1e-15 1e-15 0'
     initial_pressure = 0.0
 
     inlet_boundaries = 'bottom'
     momentum_inlet_types = 'fixed-velocity'
-    momentum_inlet_function = '0 1'
+    momentum_inlet_functors = '0 1'
     wall_boundaries = 'left right'
     momentum_wall_types = 'symmetry noslip'
     outlet_boundaries = 'top'
     momentum_outlet_types = 'fixed-pressure'
-    pressure_function = '0'
+    pressure_functors = '0'
 
     momentum_two_term_bc_expansion = true
     pressure_two_term_bc_expansion = true
+
+    mass_advection_interpolation = 'average'
+    momentum_advection_interpolation = 'average'
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [const]
     type = ADGenericFunctorMaterial
     prop_names = 'rho mu'

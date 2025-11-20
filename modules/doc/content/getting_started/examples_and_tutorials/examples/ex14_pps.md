@@ -1,7 +1,5 @@
 # Example 14 : Postprocessors and Code Verification
 
-[](---)
-
 ## Complete Source Files
 
 [ex14.i](https://github.com/idaholab/moose/blob/devel/examples/ex14_pps/ex14.i)
@@ -30,12 +28,12 @@ Postprocessor Values:
 
 !media large_media/examples/ex14-conv-rate.png
        style=width:50%;
+       alt=A plot showing the L2 error (calculated using a postprocessor) against the number of degrees of freedom.
 
-[](---)
 
 ## Comparison to a Fine Grid Solution
 
-Also present in Example 14 are two input files (`ex14_solution_comparison_1.i` and `ex14_solution_comparison_1.i`) that demonstrate how to use a [SolutionUserObject](source/userobject/SolutionUserObject.md) to read in a fine grid solution and then compare a coarse grid solution to that using `ElementL2Error`.
+Also present in Example 14 are two input files (`ex14_solution_comparison_1.i` and `ex14_solution_comparison_1.i`) that demonstrate how to use a [SolutionUserObject](source/userobjects/SolutionUserObject.md) to read in a fine grid solution and then compare a coarse grid solution to that using `ElementL2Error`.
 
 - The first input file computes the fine grid solution and outputs an XDA file.
 - An XDA file contains the full set of sata necessary to perfectly read in a previous solution...even on adapted meshes.

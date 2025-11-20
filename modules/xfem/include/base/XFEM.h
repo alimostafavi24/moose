@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -174,7 +174,7 @@ public:
   Point getEFANodeCoords(EFANode * CEMnode,
                          EFAElement * CEMElem,
                          const Elem * elem,
-                         MeshBase * displaced_mesh = NULL) const;
+                         MeshBase * displaced_mesh = nullptr) const;
 
   /**
    * Get the volume fraction of an element that is physical
@@ -225,6 +225,13 @@ public:
    * _debug_output_level)
    */
   void setDebugOutputLevel(unsigned int debug_output_level);
+
+  /**
+   * Controls the minimum average weight multiplier for each element
+   * @param min_weight_multiplier The minimum average weight multiplier applied
+   * by XFEM to the standard quadrature weights
+   */
+  void setMinWeightMultiplier(Real min_weight_multiplier);
 
   virtual bool getXFEMWeights(MooseArray<Real> & weights,
                               const Elem * elem,
@@ -361,6 +368,10 @@ private:
   /// 3: Full dump of element fragment algorithm mesh
   unsigned int _debug_output_level;
 
+  /// The minimum average multiplier applied by XFEM to the standard quadrature weights
+  /// to integrate partial elements
+  Real _min_weight_multiplier;
+
   /**
    * Data structure to store the nonlinear solution for nodes/elements affected by XFEM
    * For each node/element, this is stored as a vector that contains all components
@@ -478,16 +489,8 @@ private:
    */
   const GeometricCutUserObject * getGeometricCutForElem(const Elem * elem) const;
 
-  /**
-   * Store the material properties using dataStore
-   * @param props The material properties
-   * @return      Serialized material properties
-   */
-  std::unordered_map<unsigned int, std::string>
-  storeMaterialProperties(HashMap<unsigned int, MaterialProperties> props) const;
-
   void storeMaterialPropertiesForElementHelper(const Elem * elem,
-                                               const MaterialPropertyStorage & storage);
+                                               MaterialPropertyStorage & storage);
 
   /**
    * Helper function to store the material properties of a healed element
@@ -501,19 +504,13 @@ private:
    * Load the material properties
    * @param props_deserialized The material properties
    * @param props_serialized   The serialized material properties
-   */
-  void loadMaterialProperties(
-      HashMap<unsigned int, MaterialProperties> props_deserialized,
-      const std::unordered_map<unsigned int, std::string> & props_serialized) const;
-
-  /**
-   * Load the material properties
-   * @param props_deserialized The material properties
-   * @param props_serialized   The serialized material properties
+   *
+   * This does very dirty things and writes back to MOOSE's stateful properties. It should
+   * not do this in the future.
    */
   void loadMaterialPropertiesForElementHelper(const Elem * elem,
                                               const Xfem::CachedMaterialProperties & cached_props,
-                                              const MaterialPropertyStorage & storage) const;
+                                              MaterialPropertyStorage & storage) const;
 
   /**
    * Helper function to store the material properties of a healed element

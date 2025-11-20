@@ -4,7 +4,6 @@ The media extension provides the `!media` markdown command for adding images and
 throughout MooseDocs content, the `!media` command can optionally create a numbered
 [extensions/floats.md] by specifying the "id" setting. A caption may be include by using the
 "caption" setting.
-
 The configuration options for the media extension are listed in [config-media-ext].
 
 !devel settings id=config-media-ext
@@ -14,17 +13,27 @@ The configuration options for the media extension are listed in [config-media-ex
 
 ## Images
 
-The media extension supports including the standard html image extensions: png, gif, jpg, jpeg,
-and svg. Images are added using the !media command followed by the filename, as shown in
-[example-media]. [image-settings] includes the list of available settings for media command for
+The media extension supports including the standard HTML image extensions: png, gif, jpg, jpeg,
+and svg. Images are added using the `!media` command followed by the filename, as shown in
+[example-media]. [image-settings] includes the list of available settings for the media command for
 images.
 
 !alert note
 The "style" setting may be used, as in the example below, to control the placement and size of the
 image.
 
+!alert! note
+In order to make your webpage more accessible, you should provide
+"[alt text](https://en.wikipedia.org/wiki/Alt_attribute)" for all
+images and videos. You can do this using the "alt" setting. If
+that is not set, then the "caption" text will be used instead. If
+neither "alt" nor "caption" are set, then a warning will be issued.
+!alert-end!
+
 !devel! example id=example-media caption=Example of the media command with an image.
-!media large_media/framework/inl_blue.png style=width:25%;float:right;margin-left:30px;
+!media large_media/framework/inl_blue.png
+       style=width:25%;float:right;margin-left:30px;
+       alt=INL logo
 
 INL is part of the U.S. Department of Energy's complex of national laboratories. The laboratory
 performs work in each of the strategic goal areas of DOE: energy, national security, science and
@@ -39,13 +48,70 @@ sustainable energy systems and unique national and homeland security capabilitie
                 id=image-settings
                 caption=Settings available for images when using the media command.
 
+## Images Generated On-the-fly with Plot Scripts id=using-plot-script
+
+There are some applications where an image may change very frequently, such as
+an image generated for regular assessment runs. In this case, it is undesirable
+to store a new image file in the application repository with each code version.
+Thus the media extension provides the ability to generate images on-the-fly by
+providing a python plot script name.
+
+[example-plot-script] gives an example of the python script capability, and
+[plot-script-listing] displays the plot script used in the example.
+
+!devel! example id=example-plot-script caption=Example of how to generate a plot on-the-fly from a python script.
+!media example_plot.py
+       id=example-plot
+       caption=Example plot.
+       style=width:50%;padding:20px;
+!devel-end!
+
+!listing example_plot.py id=plot-script-listing caption=Example plot script.
+
+!alert! note title=Specifying the image name.
+The image name may be specified with the key `image_name`, e.g.,
+
+```
+!media example_plot.py
+       image_name=some_plot.jpg
+       id=example-plot
+       caption=Example plot.
+       style=width:50%;padding:20px;
+```
+
+or if not provided, the image is assumed to have the same base name as the plot
+script, but with the `.png` extension instead of `.py`. In [example-plot-script],
+the plot script was named `example_plot.py`, and the `image_name` key was omitted,
+so the image name `example_plot.png` was assumed.
+!alert-end!
+
+!alert! warning title=Always change to the plot script's directory.
+Note the line
+
+```
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
+```
+
+in the example plot script, which changes the directory to the plot script's
+directory. Otherwise, the plot script is not necessarily run from the directory
+containing it, in which case the relative path to the data (e.g., CSV) file would
+be incorrect, leading to a file-not-found error.
+!alert-end!
+
+[script-settings] lists the available settings for the media plot script command.
+
+!devel settings module=MooseDocs.extensions.media
+                object=ScriptCommand
+                id=script-settings
+                caption=Settings available for plot scripts when using the media command.
+
 ## Videos
 
 Locally stored or hosted videos can be displayed using the `!media` syntax. This works in the same
 fashion as for [images](#images), but also includes some extra settings as listed in
 [video-settings].
 
-!media http://clips.vorwaerts-gmbh.de/VfE.webm
+!media https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c0/Big_Buck_Bunny_4K.webm/Big_Buck_Bunny_4K.webm.1080p.vp9.webm
        id=big_buck_bunny
        caption=["Big Buck Bunny"](https://en.wikipedia.org/wiki/Big_Buck_Bunny) is an open-source
                animated short.

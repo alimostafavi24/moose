@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -200,11 +200,18 @@ protected:
    */
   virtual void init();
 
+  /// Add an additional variable to the hide list
+  void hideAdditionalVariable(const std::string & category, const std::string & var_name)
+  {
+    _execute_data[category].hide.insert(var_name);
+    _execute_data[category].output.erase(var_name);
+  }
+
   /**
    * Handles logic for determining if a step should be output
    * @return True if a call if output should be performed
    */
-  virtual bool shouldOutput(const ExecFlagType & type);
+  virtual bool shouldOutput();
 
   /**
    * A single call to this function should output all the necessary data for a single timestep. By
@@ -216,7 +223,7 @@ protected:
    *
    * @see outputNodalVariables outputElementalVariables outputScalarVariables outputPostprocessors
    */
-  virtual void output(const ExecFlagType & type);
+  virtual void output();
 
   /**
    * Performs output of nodal nonlinear variables
@@ -354,7 +361,7 @@ private:
   OutputDataWarehouse _execute_data;
 
   /// Storage for the last output time for the various output types, this is used to avoid duplicate output when using OUTPUT_FINAL flag
-  std::map<std::string, Real> _last_execute_time;
+  std::map<std::string, Real> & _last_execute_time;
 
   /// Flags for outputting PP/VPP data as a reporter
   const bool _postprocessors_as_reporters, _vectorpostprocessors_as_reporters;
@@ -379,9 +386,6 @@ AdvancedOutput::initPostprocessorOrVectorPostprocessorLists(const std::string & 
   std::ostringstream oss;
   oss << "execute_" << execute_data_name << "_on";
   std::string execute_on_name = oss.str();
-
-  // True if the postprocessors has been limited using 'outputs' parameter
-  bool has_limited_pps = false;
 
   std::vector<UserObject *> objs;
   _problem_ptr->theWarehouse()
@@ -411,36 +415,20 @@ AdvancedOutput::initPostprocessorOrVectorPostprocessorLists(const std::string & 
     {
       if (!_advanced_execute_on.contains(execute_data_name) ||
           (_advanced_execute_on[execute_data_name].isValid() &&
-           _advanced_execute_on[execute_data_name].contains("none")))
-        mooseWarning(
-            "Postprocessor '",
-            pps->PPName(),
-            "' has requested to be output by the '",
-            name(),
-            "' output, but postprocessor output is not support by this type of output object.");
-    }
-
-    // Set the flag state for postprocessors that utilize 'outputs' parameter
-    if (!pps_outputs.empty() && pps_outputs.find("all") == pps_outputs.end())
-      has_limited_pps = true;
-  }
-
-  // Produce the warning when 'outputs' is used, but postprocessor output is disabled
-  if (has_limited_pps && isParamValid(execute_on_name))
-  {
-    const ExecFlagEnum & pp_on = getParam<ExecFlagEnum>(execute_on_name);
-    if (pp_on.contains(EXEC_NONE))
-    {
-      if (execute_on_name == "execute_postprocessors_on")
-        mooseWarning("A Postprocessor utilizes the 'outputs' parameter; however, postprocessor "
-                     "output is disabled for the '",
+           _advanced_execute_on[execute_data_name].isValueSet("none")))
+      {
+        const bool is_pp_type = (execute_data_name == "postprocessors");
+        const std::string pp_type_str = is_pp_type ? "post-processor" : "vector post-processor";
+        mooseWarning("The ",
+                     pp_type_str,
+                     " '",
+                     pps->PPName(),
+                     "' has requested to be output by the '",
                      name(),
-                     "' output object.");
-      else if (execute_on_name == "execute_vectorpostprocessors_on")
-        mooseWarning("A VectorPostprocessor utilizes the 'outputs' parameter; however, vector "
-                     "postprocessor output is disabled for the '",
-                     name(),
-                     "' output object.");
+                     "' output, but ",
+                     pp_type_str,
+                     " output is disabled for that output object.");
+      }
     }
   }
 }

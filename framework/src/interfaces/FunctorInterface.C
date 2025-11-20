@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -18,11 +18,22 @@ FunctorInterface::validParams()
 
 FunctorInterface::FunctorInterface(const MooseObject * const moose_object)
   : _fi_params(moose_object->parameters()),
-    _fi_name(_fi_params.get<std::string>("_object_name")),
+    _fi_name(moose_object->name()),
     _fi_subproblem(_fi_params.get<SubProblem *>("_subproblem")),
     _fi_tid(_fi_params.get<THREAD_ID>("_tid"))
 {
 }
+
+#ifdef MOOSE_KOKKOS_ENABLED
+FunctorInterface::FunctorInterface(const FunctorInterface & object,
+                                   const Moose::Kokkos::FunctorCopy &)
+  : _fi_params(object._fi_params),
+    _fi_name(object._fi_name),
+    _fi_subproblem(object._fi_subproblem),
+    _fi_tid(object._fi_tid)
+{
+}
+#endif
 
 std::string
 FunctorInterface::deduceFunctorName(const std::string & name, const InputParameters & params)
@@ -31,7 +42,7 @@ FunctorInterface::deduceFunctorName(const std::string & name, const InputParamet
   {
     if (params.have_parameter<MooseFunctorName>(name))
       return params.get<MooseFunctorName>(name);
-    // variables, functor material properties, and functions are also functors
+    // variables, functor material properties, functions, and post-processors are also functors
     else if (params.have_parameter<MaterialPropertyName>(name))
       return params.get<MaterialPropertyName>(name);
     else if (params.have_parameter<VariableName>(name))
@@ -47,6 +58,8 @@ FunctorInterface::deduceFunctorName(const std::string & name, const InputParamet
       return params.get<NonlinearVariableName>(name);
     else if (params.have_parameter<FunctionName>(name))
       return params.get<FunctionName>(name);
+    else if (params.have_parameter<PostprocessorName>(name))
+      return params.get<PostprocessorName>(name);
     else
       mooseError("Invalid parameter type for retrieving a functor");
   }

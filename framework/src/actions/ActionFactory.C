@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -12,32 +12,28 @@
 #include "MooseApp.h"
 #include "InputParameterWarehouse.h"
 #include "MooseObjectAction.h"
+#include "Parser.h"
 
 ActionFactory::ActionFactory(MooseApp & app) : _app(app) {}
 
 ActionFactory::~ActionFactory() {}
 
 void
-ActionFactory::reg(const std::string & name,
-                   const std::string & task,
-                   buildActionPtr obj_builder,
-                   paramsActionPtr ref_params,
-                   const std::string & file,
-                   int line)
+ActionFactory::reg(std::shared_ptr<RegistryEntryBase> obj)
 {
+  const std::string & name = obj->_classname;
+  const std::string & task = obj->_name;
+
   auto key = std::make_pair(name, task);
   if (_current_objs.count(key) > 0)
     return;
   _current_objs.insert(key);
 
-  BuildInfo build_info;
-  build_info._build_pointer = obj_builder;
-  build_info._params_pointer = ref_params;
-  build_info._task = task;
+  BuildInfo build_info{obj, task};
   _name_to_build_info.insert(std::make_pair(name, build_info));
   _task_to_action_map.insert(std::make_pair(task, name));
   _tasks.insert(task);
-  _name_to_line.addInfo(name, task, file, line);
+  _name_to_line.addInfo(name, task, obj->_file, obj->_line);
 }
 
 std::shared_ptr<Action>
@@ -46,18 +42,35 @@ ActionFactory::create(const std::string & action,
                       InputParameters & incoming_parser_params)
 {
   std::string action_name = MooseUtils::shortName(full_action_name);
-  incoming_parser_params.addPrivateParam("_moose_app", &_app);
-  incoming_parser_params.addPrivateParam("action_type", action);
+  incoming_parser_params.addPrivateParam(MooseBase::app_param, &_app);
+  incoming_parser_params.set<std::string>(MooseBase::type_param) = action;
+
   std::pair<ActionFactory::iterator, ActionFactory::iterator> iters;
 
-  std::string unique_action_name =
+  const std::string unique_action_name =
       action + incoming_parser_params.get<std::string>("task") + full_action_name;
+
   // Create the actual parameters object that the object will reference
   InputParameters & action_params = _app.getInputParameterWarehouse().addInputParameters(
-      unique_action_name, incoming_parser_params);
+      unique_action_name, incoming_parser_params, 0, {});
 
-  // Check to make sure that all required parameters are supplied
-  action_params.checkParams(action_name);
+  if (!action_params.getHitNode())
+  {
+    // If we currently are in an action, that means that we're creating an
+    // action from within an action. Associate the action creating this one
+    // with the new action's parameters so that errors can be associated with it
+    if (const auto hit_node = _app.getCurrentActionHitNode())
+      action_params.setHitNode(*hit_node, {});
+    // Don't have one, so just use the root
+    else
+      action_params.setHitNode(_app.parser().getRoot(), {});
+  }
+
+  action_params.set<std::string>(Action::unique_action_name_param) = unique_action_name;
+  action_params.set<std::string>(MooseBase::name_param) = action_name;
+
+  // Check and finalize the parameters
+  action_params.finalize(action_name);
 
   iters = _name_to_build_info.equal_range(action);
   BuildInfo * build_info = &(iters.first->second);
@@ -66,10 +79,10 @@ ActionFactory::create(const std::string & action,
         std::string("Unable to find buildable Action from supplied InputParameters Object for ") +
         action_name);
 
-  // Add the name to the parameters and create the object
-  action_params.set<std::string>("_action_name") = action_name;
-  action_params.set<std::string>("_unique_action_name") = unique_action_name;
-  std::shared_ptr<Action> action_obj = (*build_info->_build_pointer)(action_params);
+  // Create the object
+  _currently_constructing.push_back(&action_params);
+  std::shared_ptr<Action> action_obj = build_info->_obj_pointer->buildAction(action_params);
+  _currently_constructing.pop_back();
 
   if (action_params.get<std::string>("task") == "")
     action_obj->appendTask(build_info->_task);
@@ -90,8 +103,8 @@ ActionFactory::getValidParams(const std::string & name)
   if (iter == _name_to_build_info.end())
     mooseError(std::string("A '") + name + "' is not a registered Action\n\n");
 
-  InputParameters params = (iter->second._params_pointer)();
-  params.addPrivateParam("_moose_app", &_app);
+  InputParameters params = iter->second._obj_pointer->buildParameters();
+  params.addPrivateParam(MooseBase::app_param, &_app);
   params.addPrivateParam<ActionWarehouse *>("awh", &_app.actionWarehouse());
 
   return params;
@@ -155,6 +168,13 @@ ActionFactory::getTasksByAction(const std::string & action) const
 
   return tasks;
 }
+
+const InputParameters *
+ActionFactory::currentlyConstructing() const
+{
+  return _currently_constructing.size() ? _currently_constructing.back() : nullptr;
+}
+
 FileLineInfo
 ActionFactory::getLineInfo(const std::string & name, const std::string & task) const
 {

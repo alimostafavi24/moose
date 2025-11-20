@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -9,14 +9,15 @@
 
 #pragma once
 
-#include "MeshGenerator.h"
+#include "SurfaceDelaunayGeneratorBase.h"
 
 /**
  * Generates a triangulation in the XY plane, based on an input mesh
- * defining the outer boundary and an optional set of input meshes
+ * defining the outer boundary (as well as explicitly required
+ * interior Steiner points) and an optional set of input meshes
  * defining inner hole boundaries.
  */
-class XYDelaunayGenerator : public MeshGenerator
+class XYDelaunayGenerator : public SurfaceDelaunayGeneratorBase
 {
 public:
   static InputParameters validParams();
@@ -62,6 +63,12 @@ protected:
   /// Type of algorithm used to find matching nodes (binary or exhaustive)
   const MooseEnum _algorithm;
 
+  /// Type of triangular elements to be generated
+  const MooseEnum _tri_elem_type;
+
   /// Whether mesh stitching should have verbose output
   const bool _verbose_stitching;
+
+  /// Desired interior node locations
+  std::vector<Point> _interior_points;
 };

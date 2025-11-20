@@ -88,7 +88,7 @@ velocity_interp_method = 'rc'
     drho_dt = 'drho_dt'
   []
   [mass]
-    type = PINSFVMassAdvection
+    type = PWCNSFVMassAdvection
     variable = pressure
     advected_interp_method = ${advected_interp_method}
     velocity_interp_method = ${velocity_interp_method}
@@ -215,13 +215,13 @@ velocity_interp_method = 'rc'
     type = INSFVInletVelocityBC
     boundary = 'left'
     variable = superficial_vel_x
-    function = ${u_inlet}
+    functor = ${u_inlet}
   []
   [inlet-v]
     type = INSFVInletVelocityBC
     boundary = 'left'
     variable = superficial_vel_y
-    function = 0
+    functor = 0
   []
   [inlet-T]
     type = FVDirichletBC
@@ -287,7 +287,7 @@ velocity_interp_method = 'rc'
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [fluid_props_to_mat_props]
     type = GeneralFunctorFluidProps
     fp = fp
@@ -303,7 +303,7 @@ velocity_interp_method = 'rc'
     porosity = 'porosity'
   []
   [ins_fv]
-    type = INSFVEnthalpyMaterial
+    type = INSFVEnthalpyFunctorMaterial
     rho = ${rho}
     temperature = 'T_fluid'
   []

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -24,13 +24,21 @@ ComputeInitialConditionThread::ComputeInitialConditionThread(ComputeInitialCondi
 {
 }
 
+ComputeInitialConditionThread::ComputeInitialConditionThread(
+    FEProblemBase & fe_problem, const std::set<VariableName> * target_vars)
+  : _fe_problem(fe_problem), _target_vars(target_vars)
+{
+}
+
 void
 ComputeInitialConditionThread::operator()(const ConstElemRange & range)
 {
   ParallelUniqueId puid;
   _tid = puid.id;
+  const auto current_ic_state = _fe_problem.getCurrentICState();
 
   const InitialConditionWarehouse & warehouse = _fe_problem.getInitialConditionWarehouse();
+  printGeneralExecutionInformation();
 
   // Iterate over all the elements in the range
   for (const auto & elem : range)
@@ -64,8 +72,15 @@ ComputeInitialConditionThread::operator()(const ConstElemRange & range)
       if (warehouse.hasActiveBlockObjects(id, _tid))
         for (auto ic : warehouse.getActiveBlockObjects(id, _tid))
         {
-          if ((id != elem->subdomain_id()) && !ic->variable().isNodal())
+          if ((id != elem->subdomain_id() && !ic->variable().isNodal()) ||
+              ic->getState() != current_ic_state)
             continue;
+
+          // Skip initial conditions based on target variable usage
+          const auto & var_name = ic->variable().name();
+          if (_target_vars && !_target_vars->count(var_name))
+            continue;
+
           order.push_back(&(ic->variable()));
           groups[&(ic->variable())].push_back(ic);
         }
@@ -105,4 +120,20 @@ ComputeInitialConditionThread::operator()(const ConstElemRange & range)
 void
 ComputeInitialConditionThread::join(const ComputeInitialConditionThread & /*y*/)
 {
+}
+
+void
+ComputeInitialConditionThread::printGeneralExecutionInformation() const
+{
+  const auto & ic_wh = _fe_problem.getInitialConditionWarehouse();
+  if (_fe_problem.shouldPrintExecution(_tid) && ic_wh.hasActiveObjects())
+  {
+    const auto & console = _fe_problem.console();
+    const auto & execute_on = _fe_problem.getCurrentExecuteOnFlag();
+    console << "[DBG] Executing initial conditions on elements on " << execute_on << std::endl;
+    console << "[DBG] Unordered list:" << std::endl;
+    console << ic_wh.activeObjectsToFormattedString() << std::endl;
+    console << "[DBG] The order of execution is defined by dependency resolution on every element"
+            << std::endl;
+  }
 }

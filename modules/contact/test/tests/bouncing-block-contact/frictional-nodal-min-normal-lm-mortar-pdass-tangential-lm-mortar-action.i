@@ -122,7 +122,6 @@ offset = 1e-2
 
 [Outputs]
   exodus = true
-  hide = 'contact_pressure nodal_area_frictional penetration'
 []
 
 [Preconditioning]

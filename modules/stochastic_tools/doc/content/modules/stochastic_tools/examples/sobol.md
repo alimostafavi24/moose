@@ -60,7 +60,7 @@ to the parameter indicated in the input file ($\gamma$, $q_0$, $T_0$, and $s$). 
 for further information regarding the output.
 
 For the problem at hand, the first-order and second-order indices for the two quantities of interest
-are presented in [S_T_avg] and [S_q_left]. The diagonal entries are the first-order incides and
+are presented in [S_T_avg] and [S_q_left]. The diagonal entries are the first-order indices and
 the off-diagonal terms are the second-order indices. For example for $T_{avg}$ the first order-index
 for $\gamma$ is $S_1 = 0.763$ and the second-order index $S_{1,2} = 0.014$ for $\gamma$ interacting
 with $q_0$. The negative values are essentially zero, if more replicates were executed these
@@ -124,6 +124,7 @@ python ../../python/visualize_sobol.py main_out.json --bar-plot --log-scale --st
 ```
 
 !media stochastic_tools/sobol/sobol_bar.png
+       alt=Bar graph showing the sensitivity of the heat flux and the average temperature to different variables.
 
 ```
 python ../../python/visualize_sobol.py main_out.json --heatmap --log-scale --stat second_order \
@@ -132,3 +133,4 @@ python ../../python/visualize_sobol.py main_out.json --heatmap --log-scale --sta
 ```
 
 !media stochastic_tools/sobol/sobol_heatmap.png
+       alt=Heat map showing the sensitivity of the heat flux and the average temperature to different variables.

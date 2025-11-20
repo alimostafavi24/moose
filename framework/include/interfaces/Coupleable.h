@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -9,17 +9,27 @@
 
 #pragma once
 
+#ifdef MOOSE_KOKKOS_SCOPE
+#include "KokkosVariableValue.h"
+#endif
+
 #include <unordered_map>
 #include "MooseTypes.h"
 #include "MooseArray.h"
 #include "MooseVariableFE.h"
 #include "MooseVariableFV.h"
+#include "MooseLinearVariableFV.h"
 #include "InputParameters.h"
 #include "HasMembers.h"
 
 #define usingCoupleableMembers                                                                     \
   using Coupleable::_zero;                                                                         \
-  using Coupleable::_grad_zero
+  using Coupleable::_grad_zero;                                                                    \
+  using Coupleable::_ad_zero;                                                                      \
+  using Coupleable::_ad_grad_zero;                                                                 \
+  using Coupleable::coupled;                                                                       \
+  using Coupleable::isCoupled;                                                                     \
+  using Coupleable::coupledComponents
 
 // Forward declarations
 class MooseVariableScalar;
@@ -30,6 +40,10 @@ namespace libMesh
 template <typename T>
 class DenseVector;
 }
+
+template <typename>
+class MooseVariableField;
+typedef MooseVariableField<Real> MooseWritableVariable;
 
 /**
  * Interface for objects that needs coupling capabilities
@@ -45,6 +59,13 @@ public:
    * @param is_fv Whether the \p MooseObject is a finite volume object
    */
   Coupleable(const MooseObject * moose_object, bool nodal, bool is_fv = false);
+
+#ifdef MOOSE_KOKKOS_ENABLED
+  /**
+   * Special constructor used for Kokkos functor copy during parallel dispatch
+   */
+  Coupleable(const Coupleable & object, const Moose::Kokkos::FunctorCopy & key);
+#endif
 
   /**
    * Get the list of coupled variables
@@ -110,6 +131,16 @@ public:
     return _fe_coupleable_matrix_tags;
   }
 
+  /**
+   * returns a reference to the set of writable coupled variables
+   */
+  auto & getWritableCoupledVariables() const { return _writable_coupled_variables[_c_tid]; }
+
+  /**
+   * Checks whether the object has any writable coupled variables
+   */
+  bool hasWritableCoupledVariables() const { return !getWritableCoupledVariables().empty(); }
+
 protected:
   /**
    * A call-back function provided by the derived object for actions before coupling a variable
@@ -126,12 +157,32 @@ protected:
   virtual bool isCoupled(const std::string & var_name, unsigned int i = 0) const;
 
   /**
+   * Returns true if a variable passed as a coupled value is really a constant
+   * @param var_name The name the kernel wants to refer to the variable as.
+   * @return True if the variable is actually a constant
+   */
+  virtual bool isCoupledConstant(const std::string & var_name) const;
+
+  /**
    * Number of coupled components
    * @param var_name Name of the variable
    * @return number of components this variable has (usually 1)
    */
   unsigned int coupledComponents(const std::string & var_name) const;
 
+  /**
+   * Names of the variable in the Coupleable interface
+   * @param var_name Name of the variable
+   * @param comp the component of the variable
+   * @return name the variable has been coupled as. For constants, returns the constant
+   */
+  VariableName coupledName(const std::string & var_name, unsigned int comp = 0) const;
+
+  /**
+   * Names of the variables in the Coupleable interface
+   * @param var_name Names of the variables
+   * @return names the variables have been coupled as
+   */
   std::vector<VariableName> coupledNames(const std::string & var_name) const;
 
   /**
@@ -161,11 +212,18 @@ protected:
                                              unsigned int comp = 0) const;
 
   /**
-   * Returns the values for all of a coupled variable's components
+   * Returns the values for all of a coupled variable components
    * @param var_name Name of coupled variable
    * @return Vector of VariableValue pointers for each component of \p var_name
    */
   std::vector<const VariableValue *> coupledValues(const std::string & var_name) const;
+
+  /**
+   * Returns the values for all of a coupled vector variable's components
+   * @param var_name Name of coupled variable
+   * @return Vector of VectorVariableValue pointers for each component of \p var_name
+   */
+  std::vector<const VectorVariableValue *> coupledVectorValues(const std::string & var_name) const;
 
   /**
    * Returns value of a coupled variable for use in templated automatic differentiation classes
@@ -178,6 +236,17 @@ protected:
                                                           unsigned int comp = 0) const;
 
   /**
+   * Returns value of a coupled vector variable for use in templated automatic differentiation
+   * classes
+   * @param var_name Name of coupled variable
+   * @param comp Component number for vector of coupled variables
+   * @return Reference to a GenericVariableVectorValue for the coupled variable
+   */
+  template <bool is_ad>
+  const GenericVectorVariableValue<is_ad> & coupledGenericVectorValue(const std::string & var_name,
+                                                                      unsigned int comp = 0) const;
+
+  /**
    * Returns the values for all of a coupled variable's components for use in templated automatic
    * differentiation classes
    * @param var_name Name of coupled variable
@@ -186,6 +255,38 @@ protected:
   template <bool is_ad>
   std::vector<const GenericVariableValue<is_ad> *>
   coupledGenericValues(const std::string & var_name) const;
+
+  /**
+   * Returns DOF value of a coupled variable for use in templated automatic differentiation classes
+   * @param var_name Name of coupled variable
+   * @param comp Component number for vector of coupled variables
+   * @return Reference to a GenericVariableValue for the coupled variable
+   */
+  template <bool is_ad>
+  const GenericVariableValue<is_ad> & coupledGenericDofValue(const std::string & var_name,
+                                                             unsigned int comp = 0) const;
+
+  /**
+   * Returns time derivative of a coupled variable for use in templated automatic differentiation
+   * classes
+   * @param var_name Name of coupled variable
+   * @param comp Component number for vector of coupled variables
+   * @return Reference to a GenericVariableValue for the coupled variable time derivative
+   */
+  template <bool is_ad>
+  const GenericVariableValue<is_ad> & coupledGenericDot(const std::string & var_name,
+                                                        unsigned int comp = 0) const;
+
+  /**
+   * Returns the second time derivative of a coupled variable for use in templated automatic
+   * differentiation classes
+   * @param var_name Name of coupled variable
+   * @param comp Component number for vector of coupled variables
+   * @return Reference to a GenericVariableValue for the coupled variable second time derivative
+   */
+  template <bool is_ad>
+  const GenericVariableValue<is_ad> & coupledGenericDotDot(const std::string & var_name,
+                                                           unsigned int comp = 0) const;
 
   /**
    * Returns value of a coupled lower-dimensional variable
@@ -372,7 +473,8 @@ protected:
    * @return Reference to a ArrayVariableValue for the coupled variable
    */
   const ArrayVariableValue & coupledVectorTagArrayDofValue(const std::string & var_name,
-                                                           const std::string & tag_name) const;
+                                                           const std::string & tag_name,
+                                                           unsigned int comp = 0) const;
 
   /**
    * Returns the dof values for all the coupled variables desired for a given tag
@@ -425,8 +527,8 @@ protected:
 
   /**
    * Returns value of a coupled array variable
-   * @param var_name Name of coupled vector variable
-   * @param comp Component number for vector of coupled vector variables
+   * @param var_name Name of coupled array variable
+   * @param comp Component number for vector of coupled array variables
    * @return Reference to a ArrayVariableValue for the coupled vector variable
    * @see ArrayKernel::_u
    */
@@ -441,16 +543,34 @@ protected:
   std::vector<const ArrayVariableValue *> coupledArrayValues(const std::string & var_name) const;
 
   /**
-   * Returns a *writable* reference to a coupled variable.  Note: you
-   * should not have to use this very often (use coupledValue()
-   * instead) but there are situations, such as writing to multiple
-   * AuxVariables from a single AuxKernel, where it is required.
+   * Returns a *writable* MooseVariable object for a nodal or elemental variable. Use
+   * var.setNodalValue(val[, idx]) in both cases (!) to set the solution DOF values. Only one
+   * object can obtain a writable reference in a simulation. Note that the written values will
+   * not ba available in the same system loop! E.g. values written using this API by a nodal
+   * AuxKernel will not be updated for other nodal AuxKernels during the same iteration over all
+   * nodes.
+   * @param var_name Name of coupled variable
+   * @param comp Component number for vector of coupled variables
+   * @return Reference to a MooseWritableVariable for the coupled variable
+   * @see Kernel::value
+   */
+  MooseWritableVariable & writableVariable(const std::string & var_name, unsigned int comp = 0);
+
+  /**
+   * Returns a *writable* reference to a coupled variable for writing to multiple
+   * AuxVariables from a single AuxKernel or a UserObject. Only one object can obtain
+   * a writable reference in a simulation.
    * @param var_name Name of coupled variable
    * @param comp Component number for vector of coupled variables
    * @return Reference to a VariableValue for the coupled variable
    * @see Kernel::value
    */
   virtual VariableValue & writableCoupledValue(const std::string & var_name, unsigned int comp = 0);
+
+  /**
+   * Checks that the passed in variable is only accessed writable by one object in a given subdomain
+   */
+  void checkWritableVar(MooseWritableVariable * var);
 
   /**
    * Returns an old value from previous time step  of a coupled variable
@@ -470,6 +590,14 @@ protected:
   std::vector<const VariableValue *> coupledValuesOld(const std::string & var_name) const;
 
   /**
+   * Returns the old values for all of a coupled vector variable's components
+   * @param var_name Name of coupled vector variable
+   * @return Vector of VectorVariableValue pointers for each component of \p var_name
+   */
+  std::vector<const VectorVariableValue *>
+  coupledVectorValuesOld(const std::string & var_name) const;
+
+  /**
    * Returns an old value from two time steps previous of a coupled variable
    * @param var_name Name of coupled variable
    * @param comp Component number for vector of coupled variables
@@ -478,6 +606,13 @@ protected:
    */
   virtual const VariableValue & coupledValueOlder(const std::string & var_name,
                                                   unsigned int comp = 0) const;
+
+  /**
+   * Returns the older values for all of a coupled variable's components
+   * @param var_name Name of coupled variable
+   * @return Vector of VariableValue pointers for each component of \p var_name
+   */
+  std::vector<const VariableValue *> coupledValuesOlder(const std::string & var_name) const;
 
   /**
    * Returns value of previous Newton iterate of a coupled variable
@@ -509,9 +644,9 @@ protected:
                                                               unsigned int comp = 0) const;
 
   /**
-   * Returns an old value from previous time step  of a coupled array variable
-   * @param var_name Name of coupled variable
-   * @param comp Component number for vector of coupled variables
+   * Returns an old value from previous time step of a coupled array variable
+   * @param var_name Name of coupled array variable
+   * @param comp Component number for vector of coupled array variables
    * @return Reference to a ArrayVariableValue containing the old value of the coupled variable
    * @see ArrayKernel::_u_old
    */
@@ -520,8 +655,8 @@ protected:
 
   /**
    * Returns an old value from two time steps previous of a coupled array variable
-   * @param var_name Name of coupled variable
-   * @param comp Component number for vector of coupled variables
+   * @param var_name Name of coupled array variable
+   * @param comp Component number for vector of coupled array variables
    * @return Reference to a ArrayVariableValue containing the older value of the coupled variable
    * @see ArrayKernel::_u_older
    */
@@ -740,6 +875,16 @@ protected:
                                                                   unsigned int comp = 0) const;
 
   /**
+   * Retun a gradient of a coupled array variable's time derivative
+   * @param var_name Name of coupled array variable
+   * @param comp Component number for vector of coupled array variables
+   * @return Reference to a ArrayVariableGradient containing the gradient of the time derivative
+   * the coupled array variable
+   */
+  virtual const ArrayVariableGradient & coupledArrayGradientDot(const std::string & var_name,
+                                                                unsigned int comp = 0) const;
+
+  /**
    * Returns curl of a coupled variable
    * @param var_name Name of coupled variable
    * @param comp Component number for vector of coupled variables
@@ -770,7 +915,50 @@ protected:
                                                       unsigned int comp = 0) const;
 
   /**
-   * Returns second derivative of a coupled variable
+   * Returns curl of a coupled variable for use in objects utilizing Automatic Differentiation
+   * @param var_name Name of coupled variable
+   * @param comp Component number for vector of coupled variables
+   * @return Reference to an ADVectorVariableCurl containing the curl of the coupled variable
+   * @see Kernel::_curl_u
+   */
+  const ADVectorVariableCurl & adCoupledCurl(const std::string & var_name,
+                                             unsigned int comp = 0) const;
+
+  /**
+   * Returns divergence of a coupled variable
+   * @param var_name Name of coupled variable
+   * @param comp Component number for vector of coupled variables
+   * @return Reference to a VectorVariableDivergence containing the divergence of the coupled
+   * variable
+   * @see Kernel::_div_u
+   */
+  virtual const VectorVariableDivergence & coupledDiv(const std::string & var_name,
+                                                      unsigned int comp = 0) const;
+
+  /**
+   * Returns an old divergence from previous time step of a coupled variable
+   * @param var_name Name of coupled variable
+   * @param comp Component number for vector of coupled variables
+   * @return Reference to a VectorVariableDivergence containing the old divergence of the coupled
+   * variable
+   * @see Kernel::_div_u_old
+   */
+  virtual const VectorVariableDivergence & coupledDivOld(const std::string & var_name,
+                                                         unsigned int comp = 0) const;
+
+  /**
+   * Returns an old divergence from two time steps previous of a coupled variable
+   * @param var_name Name of coupled variable
+   * @param comp Component number for vector of coupled variables
+   * @return Reference to a VectorVariableDivergence containing the older divergence of the coupled
+   * variable
+   * @see Kernel::_div_u_older
+   */
+  virtual const VectorVariableDivergence & coupledDivOlder(const std::string & var_name,
+                                                           unsigned int comp = 0) const;
+
+  /**
+   * Returns second spatial derivatives of a coupled variable
    * @param var_name Name of coupled variable
    * @param comp Component number for vector of coupled variables
    * @return Reference to a VariableSecond containing the second derivative of the coupled variable
@@ -780,7 +968,7 @@ protected:
                                                unsigned int comp = 0) const;
 
   /**
-   * Returns an old second derivative from previous time step of a coupled variable
+   * Returns an old second spatial derivatives from previous time step of a coupled variable
    * @param var_name Name of coupled variable
    * @param comp Component number for vector of coupled variables
    * @return Reference to a VariableSecond containing the old second derivative of the coupled
@@ -1013,6 +1201,16 @@ protected:
                                                 unsigned int comp = 0) const;
 
   /**
+   * Time derivative of a coupled array variable with respect to the coefficients
+   * @param var_name Name of coupled array variable
+   * @param comp Component number for vector of coupled array variables
+   * @return Reference to a ArrayVariableValue containing the time derivative of the coupled
+   * variable
+   */
+  const VariableValue & coupledArrayDotDu(const std::string & var_name,
+                                          unsigned int comp = 0) const;
+
+  /**
    * Returns nodal values of a coupled variable
    * @param var_name Name of coupled variable
    * @param comp Component number for vector of coupled variables
@@ -1160,6 +1358,15 @@ protected:
   // coupled-dof-values-end
 
   /**
+   * Returns DOF value of a coupled variable for use in Automatic Differentiation
+   * @param var_name Name of coupled variable
+   * @param comp Component number for vector of coupled variables
+   * @return Reference to an ADVariableValue for the DoFs of the coupled variable
+   */
+  virtual const ADVariableValue & adCoupledDofValues(const std::string & var_name,
+                                                     unsigned int comp = 0) const;
+
+  /**
    * method that returns _zero to RESIDUAL computing objects and _ad_zero to JACOBIAN
    * computing objects
    */
@@ -1227,8 +1434,8 @@ protected:
   /// Vector of array coupled variables
   std::vector<ArrayMooseVariable *> _coupled_array_moose_vars;
 
-  /// Vector of standard finite volume coupled variables
-  std::vector<MooseVariableFV<Real> *> _coupled_standard_fv_moose_vars;
+  /// Vector of all finite volume coupled variables
+  std::vector<MooseVariableField<Real> *> _coupled_fv_moose_vars;
 
   /// map from new to deprecated variable names
   const std::unordered_map<std::string, std::string> & _new_to_deprecated_coupled_vars;
@@ -1250,7 +1457,7 @@ protected:
       _default_value;
 
   /// Will hold the default value for optional coupled variables for automatic differentiation.
-  mutable std::unordered_map<std::string, std::unique_ptr<MooseArray<DualReal>>> _ad_default_value;
+  mutable std::unordered_map<std::string, std::unique_ptr<MooseArray<ADReal>>> _ad_default_value;
 
   /// Will hold the default value for optional vector coupled variables.
   mutable std::unordered_map<std::string, std::unique_ptr<VectorVariableValue>>
@@ -1284,10 +1491,13 @@ protected:
   /// This will always be zero because the default values for optionally coupled variables is always constant
   mutable MooseArray<ADRealTensorValue> _ad_default_second;
 
+  /// This will always be zero because the default values for optionally coupled vector variables is always constant
+  mutable MooseArray<ADRealVectorValue> _ad_default_curl;
+
   /// Zero value of a variable
   const VariableValue & _zero;
   const VariablePhiValue & _phi_zero;
-  const MooseArray<DualReal> & _ad_zero;
+  const MooseArray<ADReal> & _ad_zero;
 
   /// Zero gradient of a variable
   const VariableGradient & _grad_zero;
@@ -1318,6 +1528,9 @@ protected:
   /// This will always be zero because the default values for optionally coupled variables is always constant
   mutable VectorVariableCurl _default_vector_curl;
 
+  /// This will always be zero because the default values for optionally coupled variables is always constant
+  mutable VectorVariableDivergence _default_div;
+
   /**
    * This will always be zero because the default values for optionally coupled variables is always
    * constant and this is used for time derivative info
@@ -1326,9 +1539,6 @@ protected:
 
   /// This will always be zero because the default values for optionally coupled variables is always constant
   ArrayVariableGradient _default_array_gradient;
-
-  /// This will always be zero because the default values for optionally coupled variables is always constant
-  ArrayVariableCurl _default_array_curl;
 
   /**
    * Check that the right kind of variable is being coupled in
@@ -1415,11 +1625,26 @@ protected:
    */
   const MooseVariableFieldBase * getFieldVar(const std::string & var_name, unsigned int comp) const;
 
+  /*
+   * Extract pointer to a base coupled field variable. Could be either a finite volume or finite
+   * element variable
+   * @param var_name Name of variable desired
+   * @param comp Component number of multiple coupled variables
+   * @return Pointer to the desired variable
+   */
+  MooseVariableFieldBase * getFieldVar(const std::string & var_name, unsigned int comp);
+
   /**
    * Helper that that be used to retrieve a variable of arbitrary type \p T
    */
   template <typename T>
   const T * getVarHelper(const std::string & var_name, unsigned int comp) const;
+
+  /**
+   * Helper that can be used to retrieve a variable of arbitrary type \p T
+   */
+  template <typename T>
+  T * getVarHelper(const std::string & var_name, unsigned int comp);
 
   /**
    * Extract pointer to a coupled variable
@@ -1495,7 +1720,7 @@ public:
    * Helper method to return (and insert if necessary) the default value for Automatic
    * Differentiation for an uncoupled variable.
    * @param var_name the name of the variable for which to retrieve a default value
-   * @return VariableValue * a pointer to the associated VarirableValue.
+   * @return VariableValue * a pointer to the associated VariableValue.
    */
   const ADVariableValue * getADDefaultValue(const std::string & var_name) const;
 
@@ -1503,7 +1728,7 @@ public:
    * Helper method to return (and insert if necessary) the default vector value for Automatic
    * Differentiation for an uncoupled variable.
    * @param var_name the name of the vector variable for which to retrieve a default value
-   * @return VariableVectorValue * a pointer to the associated VarirableVectorValue.
+   * @return VectorVariableValue * a pointer to the associated VectorVariableValue.
    */
   const ADVectorVariableValue * getADDefaultVectorValue(const std::string & var_name) const;
 
@@ -1511,7 +1736,7 @@ public:
    * Helper method to return (and insert if necessary) the default gradient for Automatic
    * Differentiation for an uncoupled variable.
    * @param var_name the name of the variable for which to retrieve a default gradient
-   * @return VariableGradient * a pointer to the associated VariableGradient.
+   * @return Reference to a ADVariableGradient containing zero entries for the default values
    */
   const ADVariableGradient & getADDefaultGradient() const;
 
@@ -1519,7 +1744,7 @@ public:
    * Helper method to return (and insert if necessary) the default gradient for Automatic
    * Differentiation for an uncoupled vector variable.
    * @param var_name the name of the vector variable for which to retrieve a default gradient
-   * @return VariableGradient * a pointer to the associated VectorVariableGradient.
+   * @return Reference to a ADVectorVariableGradient containing zero entries for the default values
    */
   const ADVectorVariableGradient & getADDefaultVectorGradient() const;
 
@@ -1527,9 +1752,17 @@ public:
    * Helper method to return (and insert if necessary) the default second derivatives for Automatic
    * Differentiation for an uncoupled variable.
    * @param var_name the name of the variable for which to retrieve a default second derivative
-   * @return VariableSecond * a pointer to the associated VariableSecond.
+   * @return Reference to a ADVariableSecond containing zero entries for the default values
    */
   const ADVariableSecond & getADDefaultSecond() const;
+
+  /**
+   * Helper method to return (and insert if necessary) the default curl value for Automatic
+   * Differentiation for an uncoupled variable.
+   * @param var_name the name of the vector variable for which to retrieve a default value
+   * @return Reference to a ADVectorVariableCurl containing zero entries for the default values
+   */
+  const ADVectorVariableCurl & getADDefaultCurl() const;
 
 private:
   /**
@@ -1586,12 +1819,135 @@ private:
   /// vector tag names for which we need to request older solution states from the system
   const std::set<std::string> _older_state_tags = {Moose::OLD_SOLUTION_TAG,
                                                    Moose::OLDER_SOLUTION_TAG};
+
+  /// keep a set of allocated writable variable references to make sure only one object can obtain them per thread
+  std::vector<std::set<MooseWritableVariable *>> _writable_coupled_variables;
+
+  /**
+   * kokkos-related variables and methods
+   */
+private:
+  const Real _kokkos_default_value_zero = 0;
+
+#ifdef MOOSE_KOKKOS_SCOPE
+  Moose::Kokkos::Variable kokkosCoupledVectorTagVariable(const std::string & var_name,
+                                                         const std::string & tag_name,
+                                                         unsigned int comp) const;
+  Moose::Kokkos::Variable kokkosCoupledVectorTagVariables(const std::string & var_name,
+                                                          const std::string & tag_name) const;
+  Moose::Kokkos::Variable kokkosZeroVariable() const;
+
+public:
+  Moose::Kokkos::VariableValue kokkosCoupledVectorTagValueByName(const std::string & var_name,
+                                                                 const std::string & tag_name,
+                                                                 unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue
+  kokkosCoupledVectorTagValuesByName(const std::string & var_name,
+                                     const std::string & tag_name) const;
+  Moose::Kokkos::VariableGradient kokkosCoupledVectorTagGradientByName(const std::string & var_name,
+                                                                       const std::string & tag_name,
+                                                                       unsigned int comp = 0) const;
+  Moose::Kokkos::VariableGradient
+  kokkosCoupledVectorTagGradientsByName(const std::string & var_name,
+                                        const std::string & tag_name) const;
+  Moose::Kokkos::VariableValue kokkosCoupledVectorTagNodalValueByName(const std::string & var_name,
+                                                                      const std::string & tag_name,
+                                                                      unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue
+  kokkosCoupledVectorTagNodalValuesByName(const std::string & var_name,
+                                          const std::string & tag_name) const;
+  Moose::Kokkos::VariableValue kokkosCoupledVectorTagDofValueByName(const std::string & var_name,
+                                                                    const std::string & tag_name,
+                                                                    unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue
+  kokkosCoupledVectorTagDofValuesByName(const std::string & var_name,
+                                        const std::string & tag_name) const;
+
+  Moose::Kokkos::VariableValue kokkosCoupledVectorTagValue(const std::string & var_name,
+                                                           const std::string & tag_param_name,
+                                                           unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue
+  kokkosCoupledVectorTagValues(const std::string & var_name,
+                               const std::string & tag_param_name) const;
+  Moose::Kokkos::VariableGradient kokkosCoupledVectorTagGradient(const std::string & var_name,
+                                                                 const std::string & tag_param_name,
+                                                                 unsigned int comp = 0) const;
+  Moose::Kokkos::VariableGradient
+  kokkosCoupledVectorTagGradients(const std::string & var_name,
+                                  const std::string & tag_param_name) const;
+  Moose::Kokkos::VariableValue kokkosCoupledVectorTagNodalValue(const std::string & var_name,
+                                                                const std::string & tag_param_name,
+                                                                unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue
+  kokkosCoupledVectorTagNodalValues(const std::string & var_name,
+                                    const std::string & tag_param_name) const;
+  Moose::Kokkos::VariableValue kokkosCoupledVectorTagDofValue(const std::string & var_name,
+                                                              const std::string & tag_param_name,
+                                                              unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue
+  kokkosCoupledVectorTagDofValues(const std::string & var_name,
+                                  const std::string & tag_param_name) const;
+
+  Moose::Kokkos::VariableValue kokkosCoupledValue(const std::string & var_name,
+                                                  unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue kokkosCoupledValues(const std::string & var_name) const;
+  Moose::Kokkos::VariableGradient kokkosCoupledGradient(const std::string & var_name,
+                                                        unsigned int comp = 0) const;
+  Moose::Kokkos::VariableGradient kokkosCoupledGradients(const std::string & var_name) const;
+  Moose::Kokkos::VariableValue kokkosCoupledNodalValue(const std::string & var_name,
+                                                       unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue kokkosCoupledNodalValues(const std::string & var_name) const;
+  Moose::Kokkos::VariableValue kokkosCoupledDofValue(const std::string & var_name,
+                                                     unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue kokkosCoupledDofValues(const std::string & var_name) const;
+
+  Moose::Kokkos::VariableValue kokkosCoupledValueOld(const std::string & var_name,
+                                                     unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue kokkosCoupledValuesOld(const std::string & var_name) const;
+  Moose::Kokkos::VariableGradient kokkosCoupledGradientOld(const std::string & var_name,
+                                                           unsigned int comp = 0) const;
+  Moose::Kokkos::VariableGradient kokkosCoupledGradientsOld(const std::string & var_name) const;
+  Moose::Kokkos::VariableValue kokkosCoupledNodalValueOld(const std::string & var_name,
+                                                          unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue kokkosCoupledNodalValuesOld(const std::string & var_name) const;
+  Moose::Kokkos::VariableValue kokkosCoupledDofValueOld(const std::string & var_name,
+                                                        unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue kokkosCoupledDofValuesOld(const std::string & var_name) const;
+
+  Moose::Kokkos::VariableValue kokkosCoupledValueOlder(const std::string & var_name,
+                                                       unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue kokkosCoupledValuesOlder(const std::string & var_name) const;
+  Moose::Kokkos::VariableGradient kokkosCoupledGradientOlder(const std::string & var_name,
+                                                             unsigned int comp = 0) const;
+  Moose::Kokkos::VariableGradient kokkosCoupledGradientsOlder(const std::string & var_name) const;
+  Moose::Kokkos::VariableValue kokkosCoupledNodalValueOlder(const std::string & var_name,
+                                                            unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue kokkosCoupledNodalValuesOlder(const std::string & var_name) const;
+  Moose::Kokkos::VariableValue kokkosCoupledDofValueOlder(const std::string & var_name,
+                                                          unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue kokkosCoupledDofValuesOlder(const std::string & var_name) const;
+
+  Moose::Kokkos::VariableValue kokkosCoupledDot(const std::string & var_name,
+                                                unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue kokkosCoupledDots(const std::string & var_name) const;
+  Moose::Kokkos::VariableValue kokkosCoupledNodalDot(const std::string & var_name,
+                                                     unsigned int comp = 0) const;
+  Moose::Kokkos::VariableValue kokkosCoupledNodalDots(const std::string & var_name) const;
+
+  Moose::Kokkos::Scalar<const Real> kokkosCoupledDotDu(const std::string & var_name,
+                                                       unsigned int comp = 0) const;
+
+  Moose::Kokkos::VariableValue kokkosZeroValue() const;
+  Moose::Kokkos::VariableGradient kokkosZeroGradient() const;
+  Moose::Kokkos::VariableValue kokkosZeroNodalValue() const;
+#endif
 };
 
 template <typename T>
-const T *
-Coupleable::getVarHelper(const std::string & var_name, unsigned int comp) const
+T *
+Coupleable::getVarHelper(const std::string & var_name_in, unsigned int comp)
 {
+  const auto var_name = _c_parameters.checkForRename(var_name_in);
   auto name_to_use = var_name;
 
   // First check for supplied name
@@ -1632,11 +1988,18 @@ Coupleable::getVarHelper(const std::string & var_name, unsigned int comp) const
       if (var->name() == name_to_use)
         mooseError("The named variable is an array variable, try a "
                    "'coupledArray[Value/Gradient/Dot/etc]...' function instead");
-    for (auto & var : _coupled_standard_fv_moose_vars)
+    for (auto & var : _coupled_fv_moose_vars)
       if (var->name() == name_to_use)
         mooseError("The named variable is a finite volume variable, which the coupled[...] routine "
                    "used does not support. Try using the functor system routines instead.");
     mooseError(
         "Variable '", name_to_use, "' is of a different C++ type than you tried to fetch it as.");
   }
+}
+
+template <typename T>
+const T *
+Coupleable::getVarHelper(const std::string & var_name, unsigned int comp) const
+{
+  return const_cast<Coupleable *>(this)->getVarHelper<T>(var_name, comp);
 }

@@ -1,11 +1,11 @@
 # JsonInputFileFormatter
 
-This class produces produces a dump of the `InputParameters` that appears like the normal input
+This class produces a dump of the `InputParameters` that appears like the normal input
 file syntax.
 It is different from the [InputFileFormatter.md] in that it takes its input from JsonSyntaxTree.
 
 This formatter is used for the `--dump` command line option, described
-[here](modules/doc/content/application_usage/command_line_usage.md optional=True). It is also available for the
+[here](application_usage/command_line_usage.md optional=True). It is also available for the
 application developer, either directly or using an [AdvancedOutput](syntax/Outputs/index.md#advanced-output).
 
 ## Example output

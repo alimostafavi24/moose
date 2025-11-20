@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -44,9 +44,10 @@ PiecewiseMultilinear::sample(const ADGridPoint & pt) const
 }
 
 template <bool is_ad>
-MooseADWrapper<Real, is_ad>
-PiecewiseMultilinear::sampleInternal(const MooseADWrapper<GridPoint, is_ad> pt) const
+Moose::GenericType<Real, is_ad>
+PiecewiseMultilinear::sampleInternal(const Moose::GenericType<GridPoint, is_ad> pt) const
 {
+  using std::abs;
   /*
    * left contains the indices of the point to the 'left', 'down', etc, of pt
    * right contains the indices of the point to the 'right', 'up', etc, of pt
@@ -63,8 +64,8 @@ PiecewiseMultilinear::sampleInternal(const MooseADWrapper<GridPoint, is_ad> pt) 
    * those vertices, and weighting the contributions to the
    * final result depending on the distance of pt from the vertex
    */
-  MooseADWrapper<Real, is_ad> f = 0;
-  MooseADWrapper<Real, is_ad> weight;
+  Moose::GenericType<Real, is_ad> f = 0;
+  Moose::GenericType<Real, is_ad> weight;
   GridIndex arg(_dim);
   // number of points in hypercube = 2^_dim
   for (unsigned int i = 0; i < (1u << _dim); ++i)
@@ -76,7 +77,7 @@ PiecewiseMultilinear::sampleInternal(const MooseADWrapper<GridPoint, is_ad> pt) 
       {
         arg[j] = left[j];
         if (left[j] != right[j])
-          weight *= std::abs(pt[j] - _grid[j][right[j]]);
+          weight *= abs(pt[j] - _grid[j][right[j]]);
         else
           // unusual "end condition" case. weight by 0.5 because we will encounter this twice
           weight *= 0.5;
@@ -85,7 +86,7 @@ PiecewiseMultilinear::sampleInternal(const MooseADWrapper<GridPoint, is_ad> pt) 
       {
         arg[j] = right[j];
         if (left[j] != right[j])
-          weight *= std::abs(pt[j] - _grid[j][left[j]]);
+          weight *= abs(pt[j] - _grid[j][left[j]]);
         else
           // unusual "end condition" case. weight by 0.5 because we will encounter this twice
           weight *= 0.5;

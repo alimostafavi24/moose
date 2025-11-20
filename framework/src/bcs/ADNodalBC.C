@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -8,6 +8,8 @@
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
 #include "ADNodalBC.h"
+#include "NodalBCBase.h"
+#include "ADDirichletBCBase.h"
 
 // MOOSE includes
 #include "Assembly.h"
@@ -15,15 +17,22 @@
 #include "SystemBase.h"
 #include "MooseVariableFE.h"
 #include "MooseVariableScalar.h"
+#include "FEProblemBase.h"
 
 #include "libmesh/quadrature.h"
 
-template <typename T>
+template <typename T, typename Base>
 InputParameters
-ADNodalBCTempl<T>::validParams()
+ADNodalBCTempl<T, Base>::validParams()
+{
+  return Base::validParams();
+}
+
+template <>
+InputParameters
+ADNodalBCTempl<RealVectorValue, NodalBCBase>::validParams()
 {
   InputParameters params = NodalBCBase::validParams();
-
   // The below parameters are useful for vector Nodal BCs
   params.addParam<bool>("set_x_comp", true, "Whether to set the x-component of the variable");
   params.addParam<bool>("set_y_comp", true, "Whether to set the y-component of the variable");
@@ -31,21 +40,45 @@ ADNodalBCTempl<T>::validParams()
   return params;
 }
 
-template <typename T>
-ADNodalBCTempl<T>::ADNodalBCTempl(const InputParameters & parameters)
-  : NodalBCBase(parameters),
+template <>
+InputParameters
+ADNodalBCTempl<RealVectorValue, ADDirichletBCBase>::validParams()
+{
+  InputParameters params = ADDirichletBCBase::validParams();
+  // The below parameters are useful for vector Nodal BCs
+  params.addParam<bool>("set_x_comp", true, "Whether to set the x-component of the variable");
+  params.addParam<bool>("set_y_comp", true, "Whether to set the y-component of the variable");
+  params.addParam<bool>("set_z_comp", true, "Whether to set the z-component of the variable");
+  return params;
+}
+
+template <typename T, typename Base>
+ADNodalBCTempl<T, Base>::ADNodalBCTempl(const InputParameters & parameters)
+  : Base(parameters),
     MooseVariableInterface<T>(this,
                               true,
                               "variable",
-                              Moose::VarKindType::VAR_NONLINEAR,
-                              std::is_same<T, Real>::value ? Moose::VarFieldType::VAR_FIELD_STANDARD
-                                                           : Moose::VarFieldType::VAR_FIELD_VECTOR),
+                              Moose::VarKindType::VAR_SOLVER,
+                              std::is_same_v<T, Real> ? Moose::VarFieldType::VAR_FIELD_STANDARD
+                              : std::is_same_v<T, RealVectorValue>
+                                  ? Moose::VarFieldType::VAR_FIELD_VECTOR
+                                  : Moose::VarFieldType::VAR_FIELD_ARRAY),
+    ADFunctorInterface(this),
     _var(*this->mooseVariable()),
     _current_node(_var.node()),
     _u(_var.adNodalValue()),
-    _set_components(
-        {getParam<bool>("set_x_comp"), getParam<bool>("set_y_comp"), getParam<bool>("set_z_comp")})
+    _undisplaced_assembly(_fe_problem.assembly(_tid, _sys.number()))
 {
+  if constexpr (std::is_same_v<T, RealVectorValue>)
+  {
+    _set_components.resize(Moose::dim);
+    _set_components[0] = this->template getParam<bool>("set_x_comp");
+    _set_components[1] = this->template getParam<bool>("set_y_comp");
+    _set_components[2] = this->template getParam<bool>("set_z_comp");
+  }
+  else
+    _set_components.resize(_var.count(), true);
+
   _subproblem.haveADObjects(true);
 
   addMooseVariableDependency(this->mooseVariable());
@@ -53,206 +86,121 @@ ADNodalBCTempl<T>::ADNodalBCTempl(const InputParameters & parameters)
 
 namespace
 {
-const ADReal &
-conversionHelper(const ADReal & value, const unsigned int)
+template <typename T>
+const T &
+conversionHelper(const T & value, const unsigned int)
 {
   return value;
 }
 
-const ADReal &
-conversionHelper(const libMesh::VectorValue<ADReal> & value, const unsigned int i)
+template <typename T>
+const T &
+conversionHelper(const VectorValue<T> & value, const unsigned int i)
+{
+  return value(i);
+}
+
+template <typename T>
+const T &
+conversionHelper(const Eigen::Matrix<T, Eigen::Dynamic, 1> & value, const unsigned int i)
 {
   return value(i);
 }
 }
 
-template <typename T>
+template <typename T, typename Base>
 void
-ADNodalBCTempl<T>::computeResidual()
+ADNodalBCTempl<T, Base>::addResidual(const T & residual,
+                                     const std::vector<dof_id_type> & dof_indices)
+{
+  mooseAssert(dof_indices.size() <= _set_components.size(),
+              "The number of dof indices must be less than the number of settable components");
+
+  for (const auto i : index_range(dof_indices))
+    if (_set_components[i])
+      setResidual(_sys, conversionHelper(residual, i), dof_indices[i]);
+}
+
+template <typename T, typename Base>
+template <typename ADResidual>
+void
+ADNodalBCTempl<T, Base>::addJacobian(const ADResidual & residual,
+                                     const std::vector<dof_id_type> & dof_indices)
+{
+  mooseAssert(dof_indices.size() <= _set_components.size(),
+              "The number of dof indices must be less than the number of settable components");
+  if (!std::is_same_v<T, RealVectorValue>)
+    mooseAssert(dof_indices.size() == _var.count(),
+                "The number of dof indices should match the variable count");
+
+  for (const auto i : index_range(dof_indices))
+    if (_set_components[i])
+      // If we store into the displaced assembly for nodal bc objects the data never actually makes
+      // it into the global Jacobian
+      addJacobian(_undisplaced_assembly,
+                  Moose::Span(&conversionHelper(residual, i), 1),
+                  Moose::Span(&dof_indices[i], 1),
+                  /*scaling_factor=*/1);
+}
+
+template <typename T, typename Base>
+void
+ADNodalBCTempl<T, Base>::computeResidual()
 {
   const std::vector<dof_id_type> & dof_indices = _var.dofIndices();
   if (dof_indices.empty())
     return;
 
-  mooseAssert(dof_indices.size() <= _set_components.size(),
-              "The number of dof indices must be less than the number of settable components");
+  const auto residual = MetaPhysicL::raw_value(computeQpResidual());
 
-  auto residual = computeQpResidual();
-
-  for (auto tag_id : _vector_tags)
-    if (_sys.hasVector(tag_id))
-      for (std::size_t i = 0; i < dof_indices.size(); ++i)
-        if (_set_components[i])
-          _sys.getVector(tag_id).set(dof_indices[i], raw_value(conversionHelper(residual, i)));
+  addResidual(residual, dof_indices);
 }
 
-template <typename T>
+template <typename T, typename Base>
 void
-ADNodalBCTempl<T>::computeJacobian()
+ADNodalBCTempl<T, Base>::computeJacobian()
 {
-  const std::vector<dof_id_type> & cached_rows = _var.dofIndices();
-  if (cached_rows.empty())
+  const std::vector<dof_id_type> & dof_indices = _var.dofIndices();
+  if (dof_indices.empty())
     return;
 
-#ifndef MOOSE_GLOBAL_AD_INDEXING
-  auto ad_offset = Moose::adOffset(_var.number(), _sys.getMaxVarNDofsPerNode());
-#endif
-
-  auto residual = computeQpResidual();
-
-  mooseAssert(cached_rows.size() <= _set_components.size(),
-              "The number of dof indices must be less than the number of settable components");
-
-  // Cache the user's computeQpJacobian() value for later use.
-  for (auto tag : _matrix_tags)
-    if (_sys.hasMatrix(tag))
-      for (std::size_t i = 0; i < cached_rows.size(); ++i)
-        if (_set_components[i])
-        {
-#ifndef MOOSE_SPARSE_AD
-          mooseAssert(ad_offset + i < MOOSE_AD_MAX_DOFS_PER_ELEM,
-                      "Out of bounds access in derivative vector.");
-#endif
-          _fe_problem.assembly(0, _sys.number())
-              .cacheJacobian(cached_rows[i],
-                             cached_rows[i],
-                             conversionHelper(residual, i)
-                                 .derivatives()[
-#ifdef MOOSE_GLOBAL_AD_INDEXING
-                                     cached_rows[i]
-#else
-                                     ad_offset + i
-#endif
-          ],
-                             tag);
-        }
-}
-
-template <typename T>
-void
-ADNodalBCTempl<T>::computeResidualAndJacobian()
-{
   const auto residual = computeQpResidual();
-  const std::vector<dof_id_type> & cached_rows = _var.dofIndices();
 
-  mooseAssert(cached_rows.size() <= _set_components.size(),
-              "The number of dof indices must be less than the number of settable components");
-
-  // First the residuals
-  for (auto tag_id : _vector_tags)
-    if (_sys.hasVector(tag_id))
-      for (const auto i : index_range(cached_rows))
-        if (_set_components[i])
-          _sys.getVector(tag_id).set(cached_rows[i], raw_value(conversionHelper(residual, i)));
-
-  // Cache the user's computeQpJacobian() value for later use.
-  for (auto tag_id : _matrix_tags)
-    if (_sys.hasMatrix(tag_id))
-      for (const auto i : index_range(cached_rows))
-        if (_set_components[i])
-          _fe_problem.assembly(0, _sys.number())
-              .cacheJacobian(cached_rows[i],
-                             cached_rows[i],
-                             conversionHelper(residual, i).derivatives()[cached_rows[i]],
-                             tag_id);
+  addJacobian(residual, dof_indices);
 }
 
-template <typename T>
+template <typename T, typename Base>
 void
-ADNodalBCTempl<T>::computeOffDiagJacobian(const unsigned int jvar_num)
+ADNodalBCTempl<T, Base>::computeResidualAndJacobian()
 {
+  const std::vector<dof_id_type> & dof_indices = _var.dofIndices();
+  if (dof_indices.empty())
+    return;
+
+  const auto residual = computeQpResidual();
+
+  addResidual(MetaPhysicL::raw_value(residual), dof_indices);
+  addJacobian(residual, dof_indices);
+}
+
+template <typename T, typename Base>
+void
+ADNodalBCTempl<T, Base>::computeOffDiagJacobian(const unsigned int jvar_num)
+{
+  // Only need to do this once because AD does all the derivatives at once
   if (jvar_num == _var.number())
     computeJacobian();
-  else
-  {
-    const std::vector<dof_id_type> & cached_rows = _var.dofIndices();
-    if (cached_rows.empty())
-      return;
-
-#ifndef MOOSE_GLOBAL_AD_INDEXING
-    auto ad_offset = Moose::adOffset(jvar_num, _sys.getMaxVarNDofsPerNode());
-#endif
-    auto residual = computeQpResidual();
-
-    mooseAssert(cached_rows.size() <= _set_components.size(),
-                "The number of dof indices must be less than the number of settable components");
-
-    // Note: this only works for Lagrange variables...
-    dof_id_type cached_col = _current_node->dof_number(_sys.number(), jvar_num, 0);
-
-    // Cache the user's computeQpJacobian() value for later use.
-    for (auto tag : _matrix_tags)
-      if (_sys.hasMatrix(tag))
-        for (std::size_t i = 0; i < cached_rows.size(); ++i)
-          if (_set_components[i])
-          {
-#ifndef MOOSE_SPARSE_AD
-            mooseAssert(ad_offset + i < MOOSE_AD_MAX_DOFS_PER_ELEM,
-                        "Out of bounds access in derivative vector.");
-#endif
-            _fe_problem.assembly(0, _sys.number())
-                .cacheJacobian(cached_rows[i],
-                               cached_col,
-                               conversionHelper(residual, i)
-                                   .derivatives()[
-#ifdef MOOSE_GLOBAL_AD_INDEXING
-                                       cached_col
-#else
-                                       ad_offset + i
-#endif
-            ],
-                               tag);
-          }
-  }
 }
 
-template <typename T>
+template <typename T, typename Base>
 void
-ADNodalBCTempl<T>::computeOffDiagJacobianScalar(unsigned int jvar)
+ADNodalBCTempl<T, Base>::computeOffDiagJacobianScalar(unsigned int)
 {
-#ifndef MOOSE_GLOBAL_AD_INDEXING
-  auto ad_offset = jvar * _sys.getMaxVarNDofsPerNode();
-#endif
-  auto residual = computeQpResidual();
-  const std::vector<dof_id_type> & cached_rows = _var.dofIndices();
-
-  mooseAssert(cached_rows.size() <= _set_components.size(),
-              "The number of dof indices must be less than the number of settable components");
-
-  std::vector<dof_id_type> scalar_dof_indices;
-
-  _sys.dofMap().SCALAR_dof_indices(scalar_dof_indices, jvar);
-
-  // Our residuals rely on returning a single scalar and we don't provide any arguments to
-  // computeQpResidual so I think it only makes sense to assume that our SCALAR variable should be
-  // order one
-  mooseAssert(scalar_dof_indices.size() == 1,
-              "ADNodalBC only allows coupling of first order SCALAR variables");
-
-  // Cache the user's computeQpJacobian() value for later use.
-  for (auto tag : _matrix_tags)
-    if (_sys.hasMatrix(tag))
-      for (std::size_t i = 0; i < cached_rows.size(); ++i)
-        if (_set_components[i])
-        {
-#ifndef MOOSE_SPARSE_AD
-          mooseAssert(ad_offset + i < MOOSE_AD_MAX_DOFS_PER_ELEM,
-                      "Out of bounds access in derivative vector.");
-#endif
-          _fe_problem.assembly(0, _sys.number())
-              .cacheJacobian(cached_rows[i],
-                             scalar_dof_indices[0],
-                             conversionHelper(residual, i)
-                                 .derivatives()[
-#ifdef MOOSE_GLOBAL_AD_INDEXING
-                                     scalar_dof_indices[0]
-#else
-                                     ad_offset + i
-#endif
-          ],
-                             tag);
-        }
+  // scalar coupling will have been included in the all-at-once handling in computeOffDiagJacobian
 }
 
-template class ADNodalBCTempl<Real>;
-template class ADNodalBCTempl<RealVectorValue>;
+template class ADNodalBCTempl<Real, NodalBCBase>;
+template class ADNodalBCTempl<RealVectorValue, NodalBCBase>;
+template class ADNodalBCTempl<RealEigenVector, NodalBCBase>;
+template class ADNodalBCTempl<Real, ADDirichletBCBase>;
+template class ADNodalBCTempl<RealVectorValue, ADDirichletBCBase>;

@@ -17,58 +17,36 @@
   initial_marker = error_marker
   cycles_per_step = 2
   marker = error_marker
-  [Indicators]
-    [phi_jump]
-      type = GradientJumpIndicator
-      variable = phi
-    []
-  []
-  [Markers]
-    [error_marker]
-      type = ErrorFractionMarker
-      indicator = phi_jump
-      refine = 0.8
-      coarsen = 0.1
-    []
-  []
-[]
-
-[Variables]
-  [temperature]
-    initial_condition = 300
-  []
-[]
-
-[AuxVariables]
-  [phi]
-  []
-  [por_var]
-    family = MONOMIAL
-    order = CONSTANT
-  []
-[]
-
-[AuxKernels]
-  [corrosion]
-    type = RandomCorrosion
+  [Indicators/phi_jump]
+    type = GradientJumpIndicator
     variable = phi
-    reference_temperature = 300
-    temperature = temperature_in
-    execute_on = 'INITIAL TIMESTEP_END'
   []
-  [por_var]
-    type = ADMaterialRealAux
-    variable = por_var
-    property = porosity
-    execute_on = 'INITIAL TIMESTEP_END'
+  [Markers/error_marker]
+    type = ErrorFractionMarker
+    indicator = phi_jump
+    refine = 0.8
+    coarsen = 0.1
   []
 []
 
-[Kernels]
-  [heat_conduction]
-    type = ADHeatConduction
-    variable = temperature
-  []
+[Variables/temperature]
+  initial_condition = 300
+[]
+
+[AuxVariables/phi]
+[]
+
+[AuxKernels/corrosion]
+  type = RandomCorrosion
+  variable = phi
+  reference_temperature = 300
+  temperature = temperature_in
+  execute_on = 'INITIAL TIMESTEP_END'
+[]
+
+[Kernels/heat_conduction]
+  type = ADHeatConduction
+  variable = temperature
 []
 
 [BCs]
@@ -86,13 +64,11 @@
   []
 []
 
-[Materials]
-  [column]
-    type = PackedColumn
-    temperature = temperature
-    radius = 1 # mm
-    phase = phi
-  []
+[Materials/column]
+  type = PackedColumn
+  temperature = temperature
+  radius = 1 # mm
+  phase = phi
 []
 
 [Postprocessors]
@@ -111,9 +87,9 @@
     k0 = 12.05
     execute_on = 'INITIAL TIMESTEP_END'
   []
-  [por_var]
-    type = ElementAverageValue
-    variable = por_var
+  [average_porosity]
+    type = ADElementAverageMaterialProperty
+    mat_prop = porosity
     execute_on = 'INITIAL TIMESTEP_END'
   []
   [t_right]
@@ -141,12 +117,10 @@
   exodus = true
 []
 
-[ICs]
-  [close_pack]
-    radius = 0.01 # meter
-    outvalue = 0  # water
-    variable = phi
-    invalue = 1   # steel
-    type = ClosePackIC
-  []
+[ICs/close_pack]
+  radius = 0.01 # meter
+  outvalue = 0 # water
+  variable = phi
+  invalue = 1 # steel
+  type = ClosePackIC
 []

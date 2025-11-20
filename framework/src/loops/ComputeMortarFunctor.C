@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -23,6 +23,9 @@
 #include "libmesh/elem.h"
 #include "libmesh/point.h"
 #include "libmesh/mesh_base.h"
+
+// C++
+#include <cstring> // for "Jacobian" exception test
 
 ComputeMortarFunctor::ComputeMortarFunctor(
     const std::vector<std::shared_ptr<MortarConstraintBase>> & mortar_constraints,
@@ -51,9 +54,26 @@ ComputeMortarFunctor::ComputeMortarFunctor(
 }
 
 void
-ComputeMortarFunctor::operator()(const Moose::ComputeType compute_type)
+ComputeMortarFunctor::setupMortarMaterials()
 {
+  Moose::Mortar::setupMortarMaterials(_mortar_constraints,
+                                      _fe_problem,
+                                      _amg,
+                                      /*thread id*/ 0,
+                                      _secondary_ip_sub_to_mats,
+                                      _primary_ip_sub_to_mats,
+                                      _secondary_boundary_mats);
+}
+
+void
+ComputeMortarFunctor::operator()(const Moose::ComputeType compute_type,
+                                 const std::set<TagID> & vector_tag_ids,
+                                 const std::set<TagID> & /*matrix_tag_ids*/)
+{
+  libmesh_parallel_only(_fe_problem.comm());
+
   unsigned int num_cached = 0;
+  const auto & vector_tags = _fe_problem.getVectorTags(vector_tag_ids);
 
   const auto & secondary_elems_to_mortar_segments = _amg.secondariesToMortarSegments();
   typedef decltype(secondary_elems_to_mortar_segments.begin()) it_type;
@@ -76,7 +96,7 @@ ComputeMortarFunctor::operator()(const Moose::ComputeType compute_type)
     }
   }
 
-  auto act_functor = [this, &num_cached, compute_type]()
+  auto act_functor = [this, &num_cached, compute_type, &vector_tags]()
   {
     ++num_cached;
 
@@ -85,14 +105,17 @@ ComputeMortarFunctor::operator()(const Moose::ComputeType compute_type)
       case Moose::ComputeType::Residual:
       {
         for (auto * const mc : _mortar_constraints)
+        {
+          mc->setNormals();
           mc->computeResidual();
+        }
 
-        _assembly.cacheResidual();
-        _assembly.cacheResidualNeighbor();
-        _assembly.cacheResidualLower();
+        _assembly.cacheResidual(Assembly::GlobalDataKey{}, vector_tags);
+        _assembly.cacheResidualNeighbor(Assembly::GlobalDataKey{}, vector_tags);
+        _assembly.cacheResidualLower(Assembly::GlobalDataKey{}, vector_tags);
 
         if (num_cached % 20 == 0)
-          _assembly.addCachedResiduals();
+          _assembly.addCachedResiduals(Assembly::GlobalDataKey{}, vector_tags);
 
         break;
       }
@@ -100,47 +123,79 @@ ComputeMortarFunctor::operator()(const Moose::ComputeType compute_type)
       case Moose::ComputeType::Jacobian:
       {
         for (auto * const mc : _mortar_constraints)
+        {
+          mc->setNormals();
           mc->computeJacobian();
+        }
 
-        _assembly.cacheJacobianMortar();
+        _assembly.cacheJacobianMortar(Assembly::GlobalDataKey{});
 
         if (num_cached % 20 == 0)
-          _assembly.addCachedJacobian();
+          _assembly.addCachedJacobian(Assembly::GlobalDataKey{});
         break;
       }
 
       case Moose::ComputeType::ResidualAndJacobian:
       {
         for (auto * const mc : _mortar_constraints)
+        {
+          mc->setNormals();
           mc->computeResidualAndJacobian();
+        }
 
-        _assembly.cacheResidual();
-        _assembly.cacheResidualNeighbor();
-        _assembly.cacheResidualLower();
-        _assembly.cacheJacobianMortar();
+        _assembly.cacheResidual(Assembly::GlobalDataKey{}, vector_tags);
+        _assembly.cacheResidualNeighbor(Assembly::GlobalDataKey{}, vector_tags);
+        _assembly.cacheResidualLower(Assembly::GlobalDataKey{}, vector_tags);
+        _assembly.cacheJacobianMortar(Assembly::GlobalDataKey{});
 
         if (num_cached % 20 == 0)
         {
-          _assembly.addCachedResiduals();
-          _assembly.addCachedJacobian();
+          _assembly.addCachedResiduals(Assembly::GlobalDataKey{}, vector_tags);
+          _assembly.addCachedJacobian(Assembly::GlobalDataKey{});
         }
         break;
       }
     }
   };
 
-  Moose::Mortar::loopOverMortarSegments(iterators,
-                                        _assembly,
-                                        _subproblem,
-                                        _fe_problem,
-                                        _amg,
-                                        _displaced,
-                                        _mortar_constraints,
-                                        0,
-                                        _secondary_ip_sub_to_mats,
-                                        _primary_ip_sub_to_mats,
-                                        _secondary_boundary_mats,
-                                        act_functor);
+  PARALLEL_TRY
+  {
+    try
+    {
+      Moose::Mortar::loopOverMortarSegments(iterators,
+                                            _assembly,
+                                            _subproblem,
+                                            _fe_problem,
+                                            _amg,
+                                            _displaced,
+                                            _mortar_constraints,
+                                            0,
+                                            _secondary_ip_sub_to_mats,
+                                            _primary_ip_sub_to_mats,
+                                            _secondary_boundary_mats,
+                                            act_functor,
+                                            /*reinit_mortar_user_objects=*/true);
+    }
+    catch (MooseException & e)
+    {
+      _fe_problem.setException(e.what());
+    }
+    catch (MetaPhysicL::LogicError & e)
+    {
+      moose::translateMetaPhysicLError(e);
+    }
+    catch (std::exception & e)
+    {
+      if (!strstr(e.what(), "Jacobian") && !strstr(e.what(), "singular") &&
+          !strstr(e.what(), "det != 0"))
+        throw;
+
+      _fe_problem.setException(
+          "We caught a libMesh degeneracy exception in ComputeMortarFunctor:\n" +
+          std::string(e.what()));
+    }
+  }
+  PARALLEL_CATCH;
 
   // Call any post operations for our mortar constraints
   for (auto * const mc : _mortar_constraints)
@@ -155,7 +210,7 @@ ComputeMortarFunctor::operator()(const Moose::ComputeType compute_type)
 
   // Make sure any remaining cached residuals/Jacobians get added
   if (_assembly.computingResidual())
-    _assembly.addCachedResiduals();
+    _assembly.addCachedResiduals(Assembly::GlobalDataKey{}, vector_tags);
   if (_assembly.computingJacobian())
-    _assembly.addCachedJacobian();
+    _assembly.addCachedJacobian(Assembly::GlobalDataKey{});
 }

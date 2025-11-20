@@ -1,5 +1,5 @@
 #* This file is part of the MOOSE framework
-#* https://www.mooseframework.org
+#* https://mooseframework.inl.gov
 #*
 #* All rights reserved, see COPYRIGHT for full restrictions
 #* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -45,8 +45,10 @@ def get_language(filename):
         filename[str]: The filename to examine.
     """
     _, ext = os.path.splitext(filename)
-    if ext in ['.C', '.h', '.cpp', '.hpp']:
+    if ext in ['.C', 'K', '.h', '.cpp', '.hpp']:
         return 'cpp'
     elif ext == '.py':
         return 'python'
+    elif ext == '.i':
+        return 'moose'
     return 'text'

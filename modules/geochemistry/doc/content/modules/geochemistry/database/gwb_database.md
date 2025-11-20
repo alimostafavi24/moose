@@ -7,7 +7,7 @@ This page describes the GWB format, using a database file downloaded from the ge
 A database in GWB format can be converted to a MOOSE-formatted database using the supplied python utility
 
 ```bash
-geochemistry/python/database_converter.py -i gwb_database --format gwb -o moose_database.json
+geochemistry/python/moose_geochemistry/database_converter.py -i gwb_database --format gwb -o moose_database.json
 ```
 
 The following details the GWB database section-by-section.
@@ -200,7 +200,7 @@ In these entries:
 
 - The first line defines the name ((O-phth)--, Am++++, etc)
 - The second line provides the charge, $z$, and ion size, $\mathring{a}$ and the molecular weight.  The former two are used to compute the [activity](activity_coefficients.md) for ["decoupled" redox pairs](basis.md).
-- The remaining data provides the equilibrium reaction (in terms of the basis species, or any redox species that have been defined so far), along with its temperature-dependent equilibrium constant, which are used when the redox pair is ["coupled"](basis.md), for two purposes: (a) to eliminate the alternative oxidataion state ((O-phth)--, Am++++, etc) from all reactions in favour of the basis species; (b) to form another secondary-species reaction.
+- The remaining data provides the equilibrium reaction (in terms of the basis species, or any redox species that have been defined so far), along with its temperature-dependent equilibrium constant, which are used when the redox pair is ["coupled"](basis.md), for two purposes: (a) to eliminate the alternative oxidation state ((O-phth)--, Am++++, etc) from all reactions in favour of the basis species; (b) to form another secondary-species reaction.
 
 ## Aqueous species
 
@@ -251,7 +251,7 @@ e-
 
 ## Minerals
 
-Mineralisation reactions are defined in ths following block:
+Mineralisation reactions are defined in the following block:
 
 ```
    624 minerals

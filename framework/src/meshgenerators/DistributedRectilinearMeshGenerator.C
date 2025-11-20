@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -82,9 +82,7 @@ DistributedRectilinearMeshGenerator::validParams()
   params.addParam<MooseEnum>(
       "partition", partition, "Which method (graph linear square) use to partition mesh");
 
-  MooseEnum elem_types(
-      "EDGE EDGE2 EDGE3 EDGE4 QUAD QUAD4 QUAD8 QUAD9 TRI3 TRI6 HEX HEX8 HEX20 HEX27 TET4 TET10 "
-      "PRISM6 PRISM15 PRISM18 PYRAMID5 PYRAMID13 PYRAMID14"); // no default
+  MooseEnum elem_types("EDGE2 QUAD4 HEX8"); // no default
   params.addParam<MooseEnum>("elem_type",
                              elem_types,
                              "The type of element from libMesh to "
@@ -106,8 +104,6 @@ DistributedRectilinearMeshGenerator::validParams()
       1.,
       "bias_z>=0.5 & bias_z<=2",
       "The amount by which to grow (or shrink) the cells in the z-direction.");
-
-  params.addParamNamesToGroup("dim", "Main");
 
   params.addClassDescription(
       "Create a line, square, or cube mesh with uniformly spaced or biased elements.");
@@ -281,8 +277,8 @@ DistributedRectilinearMeshGenerator::addElement<Edge2>(const dof_id_type nx,
   elem->processor_id() = pid;
   elem->set_unique_id(elem_id);
   elem = mesh.add_elem(elem);
-  elem->set_node(0) = node0_ptr;
-  elem->set_node(1) = node1_ptr;
+  elem->set_node(0, node0_ptr);
+  elem->set_node(1, node1_ptr);
 
   if (elem_id == 0)
     boundary_info.add_side(elem, 0, 0);
@@ -525,10 +521,10 @@ DistributedRectilinearMeshGenerator::addElement<Quad4>(const dof_id_type nx,
   elem->processor_id() = pid;
   elem->set_unique_id(elem_id);
   elem = mesh.add_elem(elem);
-  elem->set_node(0) = node0_ptr;
-  elem->set_node(1) = node1_ptr;
-  elem->set_node(2) = node2_ptr;
-  elem->set_node(3) = node3_ptr;
+  elem->set_node(0, node0_ptr);
+  elem->set_node(1, node1_ptr);
+  elem->set_node(2, node2_ptr);
+  elem->set_node(3, node3_ptr);
 
   // Bottom
   if (j == 0)
@@ -751,14 +747,14 @@ DistributedRectilinearMeshGenerator::addElement<Hex8>(const dof_id_type nx,
   elem->processor_id() = pid;
   elem->set_unique_id(elem_id);
   elem = mesh.add_elem(elem);
-  elem->set_node(0) = node0_ptr;
-  elem->set_node(1) = node1_ptr;
-  elem->set_node(2) = node2_ptr;
-  elem->set_node(3) = node3_ptr;
-  elem->set_node(4) = node4_ptr;
-  elem->set_node(5) = node5_ptr;
-  elem->set_node(6) = node6_ptr;
-  elem->set_node(7) = node7_ptr;
+  elem->set_node(0, node0_ptr);
+  elem->set_node(1, node1_ptr);
+  elem->set_node(2, node2_ptr);
+  elem->set_node(3, node3_ptr);
+  elem->set_node(4, node4_ptr);
+  elem->set_node(5, node5_ptr);
+  elem->set_node(6, node6_ptr);
+  elem->set_node(7, node7_ptr);
 
   if (k == 0)
     boundary_info.add_side(elem, 0, 0);

@@ -69,7 +69,7 @@ velocity_interp_method = 'rc'
 
 [AuxKernels]
   [speed]
-    type = ADFunctorElementalAux
+    type = FunctorAux
     variable = 'speed_output'
     functor = 'speed'
   []
@@ -152,13 +152,13 @@ velocity_interp_method = 'rc'
     type = INSFVInletVelocityBC
     boundary = 'left'
     variable = superficial_vel_x
-    function = ${u_inlet}
+    functor = ${u_inlet}
   []
   [inlet-v]
     type = INSFVInletVelocityBC
     boundary = 'left'
     variable = superficial_vel_y
-    function = 0
+    functor = 0
   []
 
   [no-slip-u]
@@ -206,7 +206,7 @@ velocity_interp_method = 'rc'
   []
 []
 
-[Materials]
+[FunctorMaterials]
   # Testing this object
   [var_mat]
     type = PINSFVSpeedFunctorMaterial

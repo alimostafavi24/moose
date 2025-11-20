@@ -175,13 +175,13 @@ cp = 1
     type = INSFVInletVelocityBC
     variable = u
     boundary = 'bottom_to_0'
-    function = 0
+    functor = 0
   []
   [inlet_v]
     type = INSFVInletVelocityBC
     variable = v
     boundary = 'bottom_to_0'
-    function = 1
+    functor = 1
   []
 
   [inlet_T]
@@ -226,14 +226,14 @@ cp = 1
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [functor_constants]
     type = ADGenericFunctorMaterial
     prop_names = 'cp k'
     prop_values = '${cp} ${k}'
   []
   [ins_fv]
-    type = INSFVEnthalpyMaterial
+    type = INSFVEnthalpyFunctorMaterial
     temperature = 'T'
     rho = ${rho}
     block = 0
@@ -252,13 +252,13 @@ cp = 1
 
 [Postprocessors]
   [max_T]
-    type = ElementExtremeValue
-    variable = T
+    type = ADElementExtremeFunctorValue
+    functor = T
     block = 0
   []
   [max_Ts]
-    type = ElementExtremeValue
-    variable = Ts
+    type = ADElementExtremeFunctorValue
+    functor = Ts
     block = 1
   []
   [mdot_out]

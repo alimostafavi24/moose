@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -19,12 +19,12 @@ public:
 protected:
   virtual ADReal computeQpResidual() override;
 
-  /// Ambient temperature function
-  const Function & _T_ambient_fn;
-  /// Ambient heat transfer coefficient function
-  const Function & _htc_ambient_fn;
-  /// Post-processor by which to scale boundary condition
-  const PostprocessorValue & _scale_pp;
+  /// Ambient temperature functor
+  const Moose::Functor<ADReal> & _T_ambient;
+  /// Ambient heat transfer coefficient functor
+  const Moose::Functor<ADReal> & _htc_ambient;
+  /// Functor by which to scale the boundary condition
+  const Moose::Functor<ADReal> & _scale;
 
 public:
   static InputParameters validParams();

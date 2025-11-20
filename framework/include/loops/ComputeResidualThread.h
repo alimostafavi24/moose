@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -26,12 +26,18 @@ public:
   void join(const ComputeResidualThread & /*y*/);
 
 protected:
-  void compute(ResidualObject & ro) override;
+  using NonlinearThread::compute;
+  virtual void compute(ResidualObject & ro) override;
+  using NonlinearThread::computeOnInternalFace;
+  virtual void computeOnInternalFace() override;
+
   void accumulateNeighbor() override;
   void accumulateNeighborLower() override;
   void accumulateLower() override;
   void accumulate() override;
-  void determineResidualObjects() override;
+  void determineObjectWarehouses() override;
+
+  std::string objectType() const override { return "Residual"; }
 
   /// the tags denoting the vectors we want our residual objects to fill
   const std::set<TagID> & _tags;

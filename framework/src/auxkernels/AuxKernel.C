@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -26,60 +26,22 @@ template <typename ComputeValueType>
 InputParameters
 AuxKernelTempl<ComputeValueType>::validParams()
 {
-  InputParameters params = MooseObject::validParams();
-  params += BlockRestrictable::validParams();
-  params += BoundaryRestrictable::validParams();
-  params += RandomInterface::validParams();
-  params += MeshChangedInterface::validParams();
-  params += MaterialPropertyInterface::validParams();
-  params += FunctorInterface::validParams();
-
-  // Add the SetupInterface parameter 'execute_on' with 'linear' and 'timestep_end'
-  params += SetupInterface::validParams();
-  ExecFlagEnum & exec_enum = params.set<ExecFlagEnum>("execute_on", true);
-  exec_enum.addAvailableFlags(EXEC_PRE_DISPLACE);
-  exec_enum = {EXEC_LINEAR, EXEC_TIMESTEP_END};
-  params.setDocString("execute_on", exec_enum.getDocString());
-
-  params.addRequiredParam<AuxVariableName>("variable",
-                                           "The name of the variable that this object applies to");
-
-  params.addParam<bool>("use_displaced_mesh",
-                        false,
-                        "Whether or not this object should use the "
-                        "displaced mesh for computation.  Note that "
-                        "in the case this is true but no "
-                        "displacements are provided in the Mesh block "
-                        "the undisplaced mesh will still be used.");
-  params.addParamNamesToGroup("use_displaced_mesh", "Advanced");
-  params.addParam<bool>("check_boundary_restricted",
-                        true,
-                        "Whether to check for multiple element sides on the boundary "
-                        "in the case of a boundary restricted, element aux variable. "
-                        "Setting this to false will allow contribution to a single element's "
-                        "elemental value(s) from multiple boundary sides on the same element "
-                        "(example: when the restricted boundary exists on two or more sides "
-                        "of an element, such as at a corner of a mesh");
-
-  // This flag is set to true if the AuxKernelTempl is being used on a boundary
-  params.addPrivateParam<bool>("_on_boundary", false);
-
-  params.declareControllable("enable"); // allows Control to enable/disable this type of object
-  params.registerBase("AuxKernel");
+  InputParameters params = AuxKernelBase::validParams();
 
   if (typeid(AuxKernelTempl<ComputeValueType>).name() == typeid(VectorAuxKernel).name())
     params.registerBase("VectorAuxKernel");
   if (typeid(AuxKernelTempl<ComputeValueType>).name() == typeid(ArrayAuxKernel).name())
     params.registerBase("ArrayAuxKernel");
+
   return params;
 }
 
 template <typename ComputeValueType>
 AuxKernelTempl<ComputeValueType>::AuxKernelTempl(const InputParameters & parameters)
-  : MooseObject(parameters),
+  : AuxKernelBase(parameters),
     MooseVariableInterface<ComputeValueType>(
         this,
-        parameters.getCheckedPointerParam<AuxiliarySystem *>("_aux_sys")
+        parameters.getCheckedPointerParam<SystemBase *>("_sys")
             ->getVariable(parameters.get<THREAD_ID>("_tid"),
                           parameters.get<AuxVariableName>("variable"))
             .isNodal(),
@@ -90,42 +52,13 @@ AuxKernelTempl<ComputeValueType>::AuxKernelTempl(const InputParameters & paramet
             : (std::is_same<RealVectorValue, ComputeValueType>::value
                    ? Moose::VarFieldType::VAR_FIELD_VECTOR
                    : Moose::VarFieldType::VAR_FIELD_ARRAY)),
-    BlockRestrictable(this),
-    BoundaryRestrictable(this, mooseVariableBase()->isNodal()),
-    SetupInterface(this),
-    CoupleableMooseVariableDependencyIntermediateInterface(this, mooseVariableBase()->isNodal()),
-    FunctionInterface(this),
-    UserObjectInterface(this),
-    TransientInterface(this),
-    MaterialPropertyInterface(this, blockIDs(), boundaryIDs()),
-    PostprocessorInterface(this),
-    DependencyResolverInterface(),
-    RandomInterface(parameters,
-                    *parameters.getCheckedPointerParam<FEProblemBase *>("_fe_problem_base"),
-                    parameters.get<THREAD_ID>("_tid"),
-                    mooseVariableBase()->isNodal()),
-    GeometricSearchInterface(this),
-    Restartable(this, "AuxKernels"),
-    MeshChangedInterface(parameters),
-    VectorPostprocessorInterface(this),
-    ElementIDInterface(this),
-    FunctorInterface(this),
-    _check_boundary_restricted(getParam<bool>("check_boundary_restricted")),
-    _subproblem(*getCheckedPointerParam<SubProblem *>("_subproblem")),
-    _sys(*getCheckedPointerParam<SystemBase *>("_sys")),
-    _nl_sys(*getCheckedPointerParam<SystemBase *>("_nl_sys")),
-    _aux_sys(*getCheckedPointerParam<AuxiliarySystem *>("_aux_sys")),
-    _tid(parameters.get<THREAD_ID>("_tid")),
+
     _var(_aux_sys.getActualFieldVariable<ComputeValueType>(
         _tid, parameters.get<AuxVariableName>("variable"))),
     _nodal(_var.isNodal()),
     _u(_nodal ? _var.nodalValueArray() : _var.sln()),
 
-    _test(_var.phi()),
-    _assembly(_subproblem.assembly(_tid, 0)),
-    _bnd(boundaryRestricted()),
-    _mesh(_subproblem.mesh()),
-
+    _test(_bnd ? _var.phiFace() : _var.phi()),
     _q_point(_bnd ? _assembly.qPointsFace() : _assembly.qPoints()),
     _qrule(_bnd ? _assembly.qRuleFace() : _assembly.qRule()),
     _JxW(_bnd ? _assembly.JxWFace() : _assembly.JxW()),
@@ -138,92 +71,10 @@ AuxKernelTempl<ComputeValueType>::AuxKernelTempl(const InputParameters & paramet
 
     _current_node(_assembly.node()),
     _current_boundary_id(_assembly.currentBoundaryID()),
-    _solution(_aux_sys.solution())
+    _solution(_aux_sys.solution()),
+
+    _current_lower_d_elem(_assembly.lowerDElem())
 {
-  addMooseVariableDependency(&_var);
-  _supplied_vars.insert(parameters.get<AuxVariableName>("variable"));
-
-  const auto & coupled_vars = getCoupledVars();
-  for (const auto & it : coupled_vars)
-    for (const auto & var : it.second)
-      _depend_vars.insert(var->name());
-
-  if (_bnd && !isNodal() && _check_boundary_restricted)
-  {
-    // when the variable is elemental and this aux kernel operates on boundaries,
-    // we need to check that no elements are visited more than once through visiting
-    // all the sides on the boundaries
-    auto boundaries = _mesh.getMesh().get_boundary_info().build_side_list();
-    std::set<dof_id_type> elements;
-    for (const auto & t : boundaries)
-    {
-      if (hasBoundary(std::get<2>(t)))
-      {
-        const auto eid = std::get<0>(t);
-        const auto stat = elements.insert(eid);
-        if (!stat.second) // already existed in the set
-          mooseError(
-              "Boundary restricted auxiliary kernel '",
-              name(),
-              "' has element (id=",
-              eid,
-              ") connected with more than one boundary sides.\nTo skip this error check, "
-              "set 'check_boundary_restricted = false'.\nRefer to the AuxKernel "
-              "documentation on boundary restricted aux kernels for understanding this error.");
-      }
-    }
-  }
-}
-
-template <typename ComputeValueType>
-const std::set<std::string> &
-AuxKernelTempl<ComputeValueType>::getRequestedItems()
-{
-  return _depend_vars;
-}
-
-template <typename ComputeValueType>
-const std::set<std::string> &
-AuxKernelTempl<ComputeValueType>::getSuppliedItems()
-{
-  return _supplied_vars;
-}
-
-template <typename ComputeValueType>
-void
-AuxKernelTempl<ComputeValueType>::addUserObjectDependencyHelper(const UserObject & uo) const
-{
-  _depend_uo.insert(uo.name());
-  for (const auto & indirect_dependent : uo.getDependObjects())
-    _depend_uo.insert(indirect_dependent);
-}
-
-template <typename ComputeValueType>
-void
-AuxKernelTempl<ComputeValueType>::addPostprocessorDependencyHelper(
-    const PostprocessorName & name) const
-{
-  getUserObjectBaseByName(name); // getting the UO will call addUserObjectDependencyHelper()
-}
-
-template <typename ComputeValueType>
-void
-AuxKernelTempl<ComputeValueType>::addVectorPostprocessorDependencyHelper(
-    const VectorPostprocessorName & name) const
-{
-  getUserObjectBaseByName(name); // getting the UO will call addUserObjectDependencyHelper()
-}
-
-template <typename ComputeValueType>
-void
-AuxKernelTempl<ComputeValueType>::coupledCallback(const std::string & var_name, bool is_old) const
-{
-  if (is_old)
-  {
-    std::vector<VariableName> var_names = getParam<std::vector<VariableName>>(var_name);
-    for (const auto & name : var_names)
-      _depend_vars.erase(name);
-  }
 }
 
 template <typename ComputeValueType>
@@ -257,7 +108,7 @@ template <>
 void
 AuxKernelTempl<Real>::setDofValueHelper(const Real & value)
 {
-  mooseAssert(_n_local_dofs == 1,
+  mooseAssert(_n_shapes == 1,
               "Should only be calling setDofValue if there is one dof for the aux var");
   _var.setDofValue(value, 0);
 }
@@ -271,12 +122,25 @@ AuxKernelTempl<RealVectorValue>::setDofValueHelper(const RealVectorValue &)
 
 template <typename ComputeValueType>
 void
+AuxKernelTempl<ComputeValueType>::insert()
+{
+  if (_coincident_lower_d_calc)
+    _var.insertLower(_aux_sys.solution());
+  else
+    _var.insert(_aux_sys.solution());
+}
+
+template <typename ComputeValueType>
+void
 AuxKernelTempl<ComputeValueType>::compute()
 {
   precalculateValue();
 
   if (isNodal()) /* nodal variables */
   {
+    mooseAssert(!_coincident_lower_d_calc,
+                "Nodal evaluations are point evaluations. We don't have to concern ourselves with "
+                "coincidence of lower-d blocks and higher-d faces because they share nodes");
     if (_var.isNodalDefined())
     {
       _qp = 0;
@@ -287,8 +151,19 @@ AuxKernelTempl<ComputeValueType>::compute()
   }
   else /* elemental variables */
   {
-    _n_local_dofs = _var.numberOfDofs();
-    if (_n_local_dofs == 1) /* p0 */
+    _n_shapes = _coincident_lower_d_calc ? _var.dofIndicesLower().size() : _var.numberOfDofs();
+
+    if (_coincident_lower_d_calc)
+    {
+      static const std::string lower_error = "Make sure that the lower-d variable lives on a "
+                                             "lower-d block that is a superset of the boundary";
+      if (!_current_lower_d_elem)
+        mooseError("No lower-dimensional element. ", lower_error);
+      if (!_n_shapes)
+        mooseError("No degrees of freedom. ", lower_error);
+    }
+
+    if (_n_shapes == 1) /* p0 */
     {
       ComputeValueType value = 0;
       for (_qp = 0; _qp < _qrule->n_points(); _qp++)
@@ -297,36 +172,49 @@ AuxKernelTempl<ComputeValueType>::compute()
       if (_var.isFV())
         setDofValueHelper(value);
       else
+      {
         // update the variable data referenced by other kernels.
         // Note that this will update the values at the quadrature points too
         // (because this is an Elemental variable)
-        _var.setNodalValue(value);
+        if (_coincident_lower_d_calc)
+        {
+          _local_sol.resize(1);
+          if constexpr (std::is_same<Real, ComputeValueType>::value)
+            _local_sol(0) = value;
+          else
+            mooseAssert(false, "We should not enter the single dof branch with a vector variable");
+          _var.setLowerDofValues(_local_sol);
+        }
+        else
+          _var.setNodalValue(value);
+      }
     }
     else /* high-order */
     {
-      _local_re.resize(_n_local_dofs);
+      _local_re.resize(_n_shapes);
       _local_re.zero();
-      _local_ke.resize(_n_local_dofs, _n_local_dofs);
+      _local_ke.resize(_n_shapes, _n_shapes);
       _local_ke.zero();
 
+      const auto & test = _coincident_lower_d_calc ? _var.phiLower() : _test;
+
       // assemble the local mass matrix and the load
-      for (unsigned int i = 0; i < _test.size(); i++)
+      for (unsigned int i = 0; i < test.size(); i++)
         for (_qp = 0; _qp < _qrule->n_points(); _qp++)
         {
-          ComputeValueType t = _JxW[_qp] * _coord[_qp] * _test[i][_qp];
+          ComputeValueType t = _JxW[_qp] * _coord[_qp] * test[i][_qp];
           _local_re(i) += t * computeValue();
-          for (unsigned int j = 0; j < _test.size(); j++)
-            _local_ke(i, j) += t * _test[j][_qp];
+          for (unsigned int j = 0; j < test.size(); j++)
+            _local_ke(i, j) += t * test[j][_qp];
         }
-
       // mass matrix is always SPD but in case of boundary restricted, it will be rank deficient
-      _local_sol.resize(_n_local_dofs);
+      _local_sol.resize(_n_shapes);
       if (_bnd)
         _local_ke.svd_solve(_local_re, _local_sol);
       else
         _local_ke.cholesky_solve(_local_re, _local_sol);
 
-      _var.setDofValues(_local_sol);
+      _coincident_lower_d_calc ? _var.setLowerDofValues(_local_sol) : _var.setDofValues(_local_sol);
     }
   }
 }
@@ -349,8 +237,11 @@ AuxKernelTempl<RealEigenVector>::compute()
   }
   else /* elemental variables */
   {
-    _n_local_dofs = _var.numberOfDofs();
-    if (_n_local_dofs == 1) /* p0 */
+    mooseAssert(
+        _var.numberOfDofs() % _var.count() == 0,
+        "The number of degrees of freedom should be cleanly divisible by the variable count");
+    _n_shapes = _var.numberOfDofs() / _var.count();
+    if (_n_shapes == 1) /* p0 */
     {
       RealEigenVector value = RealEigenVector::Zero(_var.count());
       for (_qp = 0; _qp < _qrule->n_points(); _qp++)
@@ -363,10 +254,10 @@ AuxKernelTempl<RealEigenVector>::compute()
     }
     else /* high-order */
     {
-      _local_re.resize(_n_local_dofs);
+      _local_re.resize(_n_shapes);
       for (unsigned int i = 0; i < _local_re.size(); ++i)
         _local_re(i) = RealEigenVector::Zero(_var.count());
-      _local_ke.resize(_n_local_dofs, _n_local_dofs);
+      _local_ke.resize(_n_shapes, _n_shapes);
       _local_ke.zero();
 
       // assemble the local mass matrix and the load
@@ -380,14 +271,14 @@ AuxKernelTempl<RealEigenVector>::compute()
         }
 
       // mass matrix is always SPD
-      _local_sol.resize(_n_local_dofs);
+      _local_sol.resize(_n_shapes);
       for (unsigned int i = 0; i < _local_re.size(); ++i)
         _local_sol(i) = RealEigenVector::Zero(_var.count());
-      DenseVector<Number> re(_n_local_dofs);
-      DenseVector<Number> sol(_n_local_dofs);
+      DenseVector<Number> re(_n_shapes);
+      DenseVector<Number> sol(_n_shapes);
       for (unsigned int i = 0; i < _var.count(); ++i)
       {
-        for (unsigned int j = 0; j < _n_local_dofs; ++j)
+        for (unsigned int j = 0; j < _n_shapes; ++j)
           re(j) = _local_re(j)(i);
 
         if (_bnd)
@@ -395,7 +286,7 @@ AuxKernelTempl<RealEigenVector>::compute()
         else
           _local_ke.cholesky_solve(re, sol);
 
-        for (unsigned int j = 0; j < _n_local_dofs; ++j)
+        for (unsigned int j = 0; j < _n_shapes; ++j)
           _local_sol(j)(i) = sol(j);
       }
 
@@ -437,7 +328,7 @@ AuxKernelTempl<ComputeValueType>::isMortar()
   return dynamic_cast<MortarNodalAuxKernelTempl<ComputeValueType> *>(this) != nullptr;
 }
 
-// Explicitly instantiates the two versions of the AuxKernelTempl class
+// Explicitly instantiates the three versions of the AuxKernelTempl class
 template class AuxKernelTempl<Real>;
 template class AuxKernelTempl<RealVectorValue>;
 template class AuxKernelTempl<RealEigenVector>;

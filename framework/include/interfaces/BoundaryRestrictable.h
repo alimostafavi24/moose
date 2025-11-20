@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -8,6 +8,10 @@
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
 #pragma once
+
+#ifdef MOOSE_KOKKOS_ENABLED
+#include "KokkosTypes.h"
+#endif
 
 // MOOSE includes
 #include "InputParameters.h"
@@ -54,6 +58,13 @@ public:
   BoundaryRestrictable(const MooseObject * moose_object,
                        const std::set<SubdomainID> & block_ids,
                        bool nodal);
+
+#ifdef MOOSE_KOKKOS_ENABLED
+  /**
+   * Special constructor used for Kokkos functor copy during parallel dispatch
+   */
+  BoundaryRestrictable(const BoundaryRestrictable & object, const Moose::Kokkos::FunctorCopy & key);
+#endif
 
   /**
    * Helper for determining if the object is boundary restricted. This is needed for the
@@ -207,7 +218,7 @@ private:
   THREAD_ID _bnd_tid;
 
   /// Pointer to MaterialData for boundary (@see hasBoundaryMaterialProperty)
-  std::shared_ptr<MaterialData> _bnd_material_data;
+  const MaterialData & _bnd_material_data;
 
   /// Whether or not this object is restricted to nodesets
   bool _bnd_nodal;
@@ -220,12 +231,63 @@ private:
    */
   void initializeBoundaryRestrictable();
 
+#ifdef MOOSE_KOKKOS_ENABLED
+  void initializeKokkosBoundaryRestrictable(MooseMesh * mesh);
+#endif
+
 protected:
   /**
    * A helper method to avoid circular #include problems.
    * @see hasBoundaryMaterialProperty
    */
   bool hasBoundaryMaterialPropertyHelper(const std::string & prop_name) const;
+
+#ifdef MOOSE_KOKKOS_SCOPE
+  /**
+   * Get the number of nodes this Kokkos object is operating on
+   * @returns The number of nodes local to this process
+   */
+  KOKKOS_FUNCTION dof_id_type numKokkosBoundaryNodes() const { return _kokkos_node_ids.size(); }
+  /**
+   * Get the number of sides this Kokkos object is operating on
+   * @returns The number of sides local to this process
+   */
+  KOKKOS_FUNCTION dof_id_type numKokkosBoundarySides() const
+  {
+    return _kokkos_element_side_ids.size();
+  }
+  /**
+   * Get the contiguous node ID this Kokkos thread is operating on
+   * @param tid The thread ID
+   * @returns The contiguous node ID
+   */
+  KOKKOS_FUNCTION ContiguousNodeID kokkosBoundaryNodeID(ThreadID tid) const
+  {
+    return _kokkos_node_ids[tid];
+  }
+  /**
+   * Get the contiguous element ID - side index pair this Kokkos thread is operating on
+   * @param tid The thread ID
+   * @returns The contiguous element ID - side index pair
+   */
+  KOKKOS_FUNCTION auto kokkosBoundaryElementSideID(ThreadID tid) const
+  {
+    return _kokkos_element_side_ids[tid];
+  }
+#endif
+
+#ifdef MOOSE_KOKKOS_ENABLED
+private:
+  /**
+   * List of contiguous node IDs this Kokkos object is operating on
+   */
+  Moose::Kokkos::Array<ContiguousNodeID> _kokkos_node_ids;
+  /**
+   * List of contiguous element ID - side index pairs this Kokkos object is operating on
+   */
+  Moose::Kokkos::Array<Moose::Kokkos::Pair<ContiguousElementID, unsigned int>>
+      _kokkos_element_side_ids;
+#endif
 };
 
 template <typename T, bool is_ad>
@@ -235,5 +297,5 @@ BoundaryRestrictable::hasBoundaryMaterialProperty(const std::string & prop_name)
   // If you get here the supplied property is defined on all boundaries, but is still subject
   // existence in the MateialData class
   return hasBoundaryMaterialPropertyHelper(prop_name) &&
-         _bnd_material_data->haveGenericProperty<T, is_ad>(prop_name);
+         _bnd_material_data.haveGenericProperty<T, is_ad>(prop_name);
 }

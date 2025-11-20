@@ -1,23 +1,31 @@
-# Mesh System
+# [Mesh System](syntax/Mesh/index.md)
 
-A system for defining a finite element mesh.
+A system for defining a finite element / volume mesh.
 
 !---
 
 ## Creating a Mesh
 
-For complicated geometries, we generally use CUBIT from Sandia National Laboratories
+For complicated geometries, we often use CUBIT from Sandia National Laboratories
 [cubit.sandia.gov](https://cubit.sandia.gov).
 
 Other mesh generators can work as long as they output a file format that libMesh reads.
 
 !---
 
-## FileMesh
+## Mesh generators
 
-`FileMesh` is the default type:
+Meshes in MOOSE are built or loaded using [MeshGenerators](syntax/Mesh/index.md).
 
-!listing mesh/gmsh/gmsh_test.i
+To only generate the mesh without running the simulation, you can pass `--mesh-only` on the command line.
+
+!---
+
+## FileMeshGenerator
+
+`FileMeshGenerator` is the MeshGenerator to load external meshes:
+
+!listing test/tests/meshgenerators/file_mesh_generator/file_mesh_generator.i block=Mesh
 
 MOOSE supports reading and writing a large number of formats and could be extended to read more.
 
@@ -42,17 +50,19 @@ MOOSE supports reading and writing a large number of formats and could be extend
 
 !---
 
-## GeneratedMesh
+## Generating Meshes in MOOSE
 
-Built-in mesh generation is implemented for lines, rectangles, and rectangular prisms
+Built-in mesh generation is implemented for lines, rectangles,  rectangular prisms or [extruded reactor geometries](modules/reactor/index.md).
 
-!listing initial_adaptivity_test.i block=Mesh
+!listing face_info_tri.i block=Mesh
 
 The sides are named in a logical way and are numbered:
 
 - 1D: left = 0, right = 1
 - 2D: bottom = 0, right = 1, top = 2, left = 3
 - 3D: back = 0, bottom = 1, right = 2, top = 3, left = 4, front = 5
+
+The capability is very convenient for parametric mesh optimization!
 
 !---
 
@@ -69,15 +79,19 @@ Names can be assigned to IDs for existing meshes to ease input file maintenance.
 
 !listing name_on_the_fly.i block=Mesh BCs Materials
 
-!---
+!!mesh-advanced
+
+# Mesh system (continued)
 
 ## Replicated Mesh
 
 When running in parallel the default mode for operation is to use a replicated mesh, which
 creates a complete copy of the mesh for each processor.
 
-```text
-parallel_type = replicated
+```moose
+[Mesh]
+  parallel_type = replicated
+[]
 ```
 
 !---
@@ -87,8 +101,10 @@ parallel_type = replicated
 Changing the type to distributed when running in parallel operates such that only the portion of the
 mesh owned by a processor is stored on that processor.
 
-```text
-parallel_type = distributed
+```moose
+[Mesh]
+  parallel_type = distributed
+[]
 ```
 
 If the mesh is too large to read in on a single processor, it can be split prior to the simulation.
@@ -107,8 +123,16 @@ Calculations can take place in either the initial mesh configuration or, when re
 To enable displacements, provide a vector of displacement variable names for each spatial dimension
 in the Mesh block.
 
-!listing dg_displacement.i block=Mesh
+!style! fontsize=75%
+
+!listing /displaced/child.i block=Mesh
+
+!style-end!
 
 Objects can enforce the use of the displaced mesh within the validParams function.
 
+!style! fontsize=75%
+
 !listing PenetrationAux.C line=use_displaced_mesh
+
+!style-end!

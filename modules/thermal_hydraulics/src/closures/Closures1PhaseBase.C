@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -24,7 +24,6 @@ void
 Closures1PhaseBase::addWallFrictionFunctionMaterial(const FlowChannel1Phase & flow_channel) const
 {
   const FunctionName & f_D_fn_name = flow_channel.getParam<FunctionName>("f");
-  flow_channel.makeFunctionControllableIfConstant(f_D_fn_name, "f");
 
   const std::string class_name = "ADWallFrictionFunctionMaterial";
   InputParameters params = _factory.getValidParams(class_name);
@@ -45,8 +44,6 @@ Closures1PhaseBase::addAverageWallTemperatureMaterial(const FlowChannel1Phase & 
       flow_channel.getWallHTCNames1Phase();
   params.set<std::vector<VariableName>>("P_hf_sources") = flow_channel.getHeatedPerimeterNames();
   params.set<std::vector<VariableName>>("P_hf_total") = {FlowModel::HEAT_FLUX_PERIMETER};
-  params.set<MaterialPropertyName>("Hw_average") =
-      FlowModelSinglePhase::HEAT_TRANSFER_COEFFICIENT_WALL;
   params.set<std::vector<VariableName>>("T_fluid") = {FlowModelSinglePhase::TEMPERATURE};
   _sim.addMaterial(class_name, genName(flow_channel.name(), "avg_T_wall_3eqn_mat"), params);
 }

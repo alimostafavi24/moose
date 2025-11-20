@@ -7,6 +7,8 @@
     xmax = 0.304 # Length of test chamber
     ymax = 0.0257 # Test chamber radius
   []
+  coord_type = RZ
+  rz_coord_axis = X
 []
 
 [Variables]
@@ -36,18 +38,14 @@
   []
 []
 
-[Materials]
-  [steel]
-    type = ADGenericConstantMaterial
-    prop_names = thermal_conductivity
-    prop_values = 18 # K: (W/m*K) from wikipedia @296K
-  []
+[Materials/steel]
+  type = ADGenericConstantMaterial
+  prop_names = thermal_conductivity
+  prop_values = 18 # K: (W/m*K) from wikipedia @296K
 []
 
 [Problem]
   type = FEProblem
-  coord_type = RZ
-  rz_coord_axis = X
 []
 
 [Executioner]

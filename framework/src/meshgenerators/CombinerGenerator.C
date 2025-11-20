@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -12,6 +12,7 @@
 #include "CastUniquePointer.h"
 #include "MooseUtils.h"
 #include "DelimitedFileReader.h"
+#include "MooseMeshUtils.h"
 
 #include "libmesh/replicated_mesh.h"
 #include "libmesh/unstructured_mesh.h"
@@ -44,13 +45,26 @@ CombinerGenerator::validParams()
   params.addParam<std::vector<FileName>>(
       "positions_file", "Alternative way to provide the position of each given mesh.");
 
+  params.addParam<bool>("avoid_merging_subdomains",
+                        false,
+                        "Whether to prevent merging subdomains by offsetting ids. The first mesh "
+                        "in the input will keep the same subdomains ids, the others will have "
+                        "offsets. All subdomain names will remain valid");
+  params.addParam<bool>("avoid_merging_boundaries",
+                        false,
+                        "Whether to prevent merging sidesets by offsetting ids. The first mesh "
+                        "in the input will keep the same boundary ids, the others will have "
+                        "offsets. All boundary names will remain valid");
+
   return params;
 }
 
 CombinerGenerator::CombinerGenerator(const InputParameters & parameters)
   : MeshGenerator(parameters),
     _meshes(getMeshes("inputs")),
-    _input_names(getParam<std::vector<MeshGeneratorName>>("inputs"))
+    _input_names(getParam<std::vector<MeshGeneratorName>>("inputs")),
+    _avoid_merging_subdomains(getParam<bool>("avoid_merging_subdomains")),
+    _avoid_merging_boundaries(getParam<bool>("avoid_merging_boundaries"))
 {
   if (_input_names.empty())
     paramError("input_names", "You need to specify at least one MeshGenerator as an input.");
@@ -131,6 +145,13 @@ CombinerGenerator::generate()
     if (!mesh)
       paramError("inputs", _input_names[0], " is not a valid unstructured mesh");
 
+    // Move the first input mesh if applicable
+    if (_positions.size())
+    {
+      MeshTools::Modification::translate(
+          *mesh, _positions[0](0), _positions[0](1), _positions[0](2));
+    }
+
     // Read in all of the other meshes
     for (MooseIndex(_meshes) i = 1; i < _meshes.size(); ++i)
     {
@@ -146,9 +167,15 @@ CombinerGenerator::generate()
             *other_mesh, _positions[i](0), _positions[i](1), _positions[i](2));
       }
 
-      copyIntoMesh(*mesh, *other_mesh);
+      MooseMeshUtils::copyIntoMesh(*this,
+                                   *mesh,
+                                   *other_mesh,
+                                   _avoid_merging_subdomains,
+                                   _avoid_merging_boundaries,
+                                   _communicator);
     }
 
+    mesh->set_isnt_prepared();
     return dynamic_pointer_cast<MeshBase>(mesh);
   }
   else // Case 2
@@ -193,7 +220,12 @@ CombinerGenerator::generate()
           *translated_mesh, _positions[i](0), _positions[i](1), _positions[i](2));
 
       // Copy into final mesh
-      copyIntoMesh(*final_mesh, *translated_mesh);
+      MooseMeshUtils::copyIntoMesh(*this,
+                                   *final_mesh,
+                                   *translated_mesh,
+                                   _avoid_merging_subdomains,
+                                   _avoid_merging_boundaries,
+                                   _communicator);
 
       // Reset nodal coordinates
       for (auto translated_node_ptr : translated_mesh->node_ptr_range())
@@ -206,52 +238,7 @@ CombinerGenerator::generate()
       }
     }
 
+    final_mesh->set_isnt_prepared();
     return dynamic_pointer_cast<MeshBase>(final_mesh);
   }
-}
-
-void
-CombinerGenerator::copyIntoMesh(UnstructuredMesh & destination, const UnstructuredMesh & source)
-{
-  dof_id_type node_delta = destination.max_node_id();
-  dof_id_type elem_delta = destination.max_elem_id();
-
-  unique_id_type unique_delta =
-#ifdef LIBMESH_ENABLE_UNIQUE_ID
-      destination.parallel_max_unique_id();
-#else
-      0;
-#endif
-
-  // Copy mesh data over from the other mesh
-  destination.copy_nodes_and_elements(source,
-                                      // Skipping this should cause the neighors
-                                      // to simply be copied from the other mesh
-                                      // (which makes sense and is way faster)
-                                      /*skip_find_neighbors = */ true,
-                                      elem_delta,
-                                      node_delta,
-                                      unique_delta);
-
-  // Note: the code below originally came from ReplicatedMesh::stitch_mesh_helper()
-  // in libMesh replicated_mesh.C around line 1203
-
-  // Copy BoundaryInfo from other_mesh too.  We do this via the
-  // list APIs rather than element-by-element for speed.
-  BoundaryInfo & boundary = destination.get_boundary_info();
-  const BoundaryInfo & other_boundary = source.get_boundary_info();
-  for (const auto & t : other_boundary.build_node_list())
-    boundary.add_node(std::get<0>(t) + node_delta, std::get<1>(t));
-
-  for (const auto & t : other_boundary.build_side_list())
-    boundary.add_side(std::get<0>(t) + elem_delta, std::get<1>(t), std::get<2>(t));
-
-  for (const auto & t : other_boundary.build_edge_list())
-    boundary.add_edge(std::get<0>(t) + elem_delta, std::get<1>(t), std::get<2>(t));
-
-  for (const auto & t : other_boundary.build_shellface_list())
-    boundary.add_shellface(std::get<0>(t) + elem_delta, std::get<1>(t), std::get<2>(t));
-
-  for (auto elem : other_boundary.get_sideset_name_map())
-    boundary.set_sideset_name_map().insert(elem);
 }

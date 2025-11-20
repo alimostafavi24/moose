@@ -7,19 +7,17 @@
     xmax = 0.304                  # Length of test chamber
     ymax = 0.0257                 # Test chamber radius
   []
+  coord_type = RZ                 # Axisymmetric RZ
+  rz_coord_axis = X               # Which axis the symmetry is around
 []
 
-[Variables]
-  [pressure]
-    # Adds a Linear Lagrange variable by default
-  []
+[Variables/pressure]
+  # Adds a Linear Lagrange variable by default
 []
 
-[Kernels]
-  [diffusion]
-    type = ADDiffusion  # Laplacian operator using automatic differentiation
-    variable = pressure # Operate on the "pressure" variable from above
-  []
+[Kernels/diffusion]
+  type = ADDiffusion  # Laplacian operator using automatic differentiation
+  variable = pressure # Operate on the "pressure" variable from above
 []
 
 [BCs]
@@ -39,8 +37,6 @@
 
 [Problem]
   type = FEProblem  # This is the "normal" type of Finite Element Problem in MOOSE
-  coord_type = RZ   # Axisymmetric RZ
-  rz_coord_axis = X # Which axis the symmetry is around
 []
 
 [Executioner]

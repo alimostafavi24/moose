@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -8,7 +8,7 @@
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
 #include "ContactApp.h"
-#include "TensorMechanicsApp.h"
+#include "SolidMechanicsApp.h"
 #include "Moose.h"
 #include "AppFactory.h"
 #include "MooseSyntax.h"
@@ -20,6 +20,7 @@ ContactApp::validParams()
 
   params.set<bool>("automatic_automatic_scaling") = false;
   params.set<bool>("use_legacy_material_output") = false;
+  params.set<bool>("use_legacy_initial_residual_evaluation_behavior") = false;
 
   return params;
 }
@@ -33,10 +34,14 @@ ContactApp::ContactApp(const InputParameters & parameters) : MooseApp(parameters
 
 ContactApp::~ContactApp() {}
 
-static void
-associateSyntaxInner(Syntax & syntax, ActionFactory & /*action_factory*/)
+void
+ContactApp::registerAll(Factory & f, ActionFactory & af, Syntax & syntax)
 {
+  Registry::registerObjectsTo(f, {"ContactApp"});
+  Registry::registerActionsTo(af, {"ContactApp"});
+
   registerSyntax("ContactAction", "Contact/*");
+  registerSyntax("ExplicitDynamicsContactAction", "ExplicitDynamicsContact/*");
 
   registerTask("output_penetration_info_vars", false);
   registerTask("add_contact_aux_variable", false);
@@ -44,51 +49,16 @@ associateSyntaxInner(Syntax & syntax, ActionFactory & /*action_factory*/)
   syntax.addDependency("add_postprocessor", "output_penetration_info_vars");
   syntax.addDependency("add_contact_aux_variable", "add_variable");
   syntax.addDependency("setup_variable_complete", "add_contact_aux_variable");
-}
 
-void
-ContactApp::registerAll(Factory & f, ActionFactory & af, Syntax & s)
-{
-  Registry::registerObjectsTo(f, {"ContactApp"});
-  Registry::registerActionsTo(af, {"ContactApp"});
-  associateSyntaxInner(s, af);
-
-  TensorMechanicsApp::registerAll(f, af, s);
+  SolidMechanicsApp::registerAll(f, af, syntax);
 }
 
 void
 ContactApp::registerApps()
 {
   registerApp(ContactApp);
-}
 
-void
-ContactApp::registerObjects(Factory & factory)
-{
-  mooseDeprecated("use registerAll instead of registerObjects");
-  Registry::registerObjectsTo(factory, {"ContactApp"});
-}
-
-void
-ContactApp::associateSyntax(Syntax & syntax, ActionFactory & action_factory)
-{
-  mooseDeprecated("use registerAll instead of associateSyntax");
-  Registry::registerActionsTo(action_factory, {"ContactApp"});
-  associateSyntaxInner(syntax, action_factory);
-}
-
-void
-ContactApp::registerObjectDepends(Factory & factory)
-{
-  mooseDeprecated("use registerAll instead of registerObjectsDepends");
-  TensorMechanicsApp::registerObjects(factory);
-}
-
-void
-ContactApp::associateSyntaxDepends(Syntax & syntax, ActionFactory & action_factory)
-{
-  mooseDeprecated("use registerAll instead of registerObjectsDepends");
-  TensorMechanicsApp::associateSyntax(syntax, action_factory);
+  SolidMechanicsApp::registerApps();
 }
 
 extern "C" void

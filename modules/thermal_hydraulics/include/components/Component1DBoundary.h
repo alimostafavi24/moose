@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -22,12 +22,17 @@ public:
 protected:
   virtual void setupMesh() override;
   virtual void check() const override;
+  virtual Convergence * getNonlinearConvergence() const override { return nullptr; }
 
   /// Name of the connected component
   std::string _connected_component_name;
   /// End type of the connected component
   EEndType _connected_component_end_type;
 
+  /// Element
+  const Elem * _elem;
+  /// Side ID
+  unsigned short int _side;
   /// Node ID
   dof_id_type _node;
   /// Outward normal on this boundary

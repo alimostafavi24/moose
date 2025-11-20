@@ -13,7 +13,7 @@
       rel_err = 1e-5
       max_parallel = 1
       group = '1phase rdg explicit pipe free_boundary'
-      ad_indexing_type = 'global'
+      restep = false # Test is prescribed to abort on failed timestep
 
       detail = 'using an explicit temporal discretization, and'
     []
@@ -32,8 +32,8 @@
       abs_zero = 1e-8
       rel_err = 1e-5
       max_parallel = 1
-      method = opt
-      ad_indexing_type = 'global'
+      capabilities = 'method=opt'
+      restep = false # Test is prescribed to abort on failed timestep
 
       detail = 'using an implicit temporal discretization.'
     []

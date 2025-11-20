@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -24,8 +24,9 @@ ElementExtremeFunctorValueTempl<is_ad>::validParams()
       "The name of the functor to use to identify the location at which "
       "the functor value should be taken; if not provided, this defaults "
       "to the 'functor' parameter.");
+  params.addParam<Real>("scale", 1.0, "Scaling factor to apply to functor value");
   params.addClassDescription(
-      "Finds either the min or max elemental value of a variable over the domain.");
+      "Finds either the min or max elemental value of a functor over the domain.");
   return params;
 }
 
@@ -35,11 +36,9 @@ ElementExtremeFunctorValueTempl<is_ad>::ElementExtremeFunctorValueTempl(
   : ExtremeValueBase<ElementPostprocessor>(parameters),
     _functor(getFunctor<GenericReal<is_ad>>("functor")),
     _proxy_functor(isParamValid("proxy_functor") ? getFunctor<GenericReal<is_ad>>("proxy_functor")
-                                                 : getFunctor<GenericReal<is_ad>>("functor"))
+                                                 : getFunctor<GenericReal<is_ad>>("functor")),
+    _scale(getParam<Real>("scale"))
 {
-  if (this->isNodal())
-    this->paramError("variable", "This AuxKernel only supports Elemental fields");
-  _use_proxy = isParamValid("proxy_functor");
 }
 
 template <bool is_ad>
@@ -49,8 +48,8 @@ ElementExtremeFunctorValueTempl<is_ad>::getProxyValuePair()
   // Most element evaluations do not use skewness correction,
   // but this could become a parameter in the future
   Moose::ElemArg elem = makeElemArg(_current_elem);
-  return std::make_pair(MetaPhysicL::raw_value(_proxy_functor(elem)),
-                        MetaPhysicL::raw_value(_functor(elem)));
+  return std::make_pair(MetaPhysicL::raw_value(_proxy_functor(elem, determineState())),
+                        _scale * MetaPhysicL::raw_value(_functor(elem, determineState())));
 }
 
 template class ElementExtremeFunctorValueTempl<false>;

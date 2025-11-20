@@ -1,11 +1,13 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
 //*
 //* Licensed under LGPL 2.1, please see LICENSE for details
 //* https://www.gnu.org/licenses/lgpl-2.1.html
+
+#pragma once
 
 #include "RankFourTensor.h"
 
@@ -34,7 +36,7 @@ namespace MathUtils
 template <>
 void mooseSetToZero<RankFourTensorTempl<Real>>(RankFourTensorTempl<Real> & v);
 template <>
-void mooseSetToZero<RankFourTensorTempl<DualReal>>(RankFourTensorTempl<DualReal> & v);
+void mooseSetToZero<RankFourTensorTempl<ADReal>>(RankFourTensorTempl<ADReal> & v);
 }
 
 template <typename T>
@@ -116,15 +118,6 @@ RankFourTensorTempl<T>::zero()
 {
   for (auto i : make_range(N4))
     _vals[i] = 0.0;
-}
-
-template <typename T>
-RankFourTensorTempl<T> &
-RankFourTensorTempl<T>::operator=(const RankFourTensorTempl<T> & a)
-{
-  for (auto i : make_range(N4))
-    _vals[i] = a._vals[i];
-  return *this;
 }
 
 template <typename T>
@@ -248,7 +241,8 @@ RankFourTensorTempl<T>::L2norm() const
   for (auto i : make_range(N4))
     l2 += Utility::pow<2>(_vals[i]);
 
-  return std::sqrt(l2);
+  using std::sqrt;
+  return sqrt(l2);
 }
 
 template <typename T>
@@ -813,9 +807,9 @@ RankFourTensorTempl<T>::fillGeneralOrthotropicFromInputVector(const std::vector<
   const T & nubc = input[11];
 
   // Input must satisfy constraints.
-  bool preserve_symmetry = MooseUtils::absoluteFuzzyEqual(nuab * Eb, nuba * Ea) &&
-                           MooseUtils::absoluteFuzzyEqual(nuca * Ea, nuac * Ec) &&
-                           MooseUtils::absoluteFuzzyEqual(nubc * Ec, nucb * Eb);
+  bool preserve_symmetry = MooseUtils::relativeFuzzyEqual(nuab * Eb, nuba * Ea) &&
+                           MooseUtils::relativeFuzzyEqual(nuca * Ea, nuac * Ec) &&
+                           MooseUtils::relativeFuzzyEqual(nubc * Ec, nucb * Eb);
 
   if (!preserve_symmetry)
     mooseError("Orthotropic elasticity tensor input is not consistent with symmetry requirements. "
@@ -928,11 +922,11 @@ RankFourTensorTempl<T>::sum3x3() const
 }
 
 template <typename T>
-VectorValue<T>
+libMesh::VectorValue<T>
 RankFourTensorTempl<T>::sum3x1() const
 {
   // used for volumetric locking correction
-  VectorValue<T> a(3);
+  libMesh::VectorValue<T> a(3);
   a(0) = (*this)(0, 0, 0, 0) + (*this)(0, 0, 1, 1) + (*this)(0, 0, 2, 2); // C0000 + C0011 + C0022
   a(1) = (*this)(1, 1, 0, 0) + (*this)(1, 1, 1, 1) + (*this)(1, 1, 2, 2); // C1100 + C1111 + C1122
   a(2) = (*this)(2, 2, 0, 0) + (*this)(2, 2, 1, 1) + (*this)(2, 2, 2, 2); // C2200 + C2211 + C2222

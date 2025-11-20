@@ -2,7 +2,7 @@
 height = 2.2
 density = 1.2
 gravity = 10
-head = ${fparse height * density * gravity}
+head = '${fparse height * density * gravity}'
 
 [Mesh]
   [mesh]
@@ -59,21 +59,23 @@ head = ${fparse height * density * gravity}
     initial_pressure = 0
     inlet_boundaries = 'bottom'
     momentum_inlet_types = 'fixed-pressure'
-    momentum_inlet_function = '${head}'
+    momentum_inlet_functors = '${head}'
     energy_inlet_types = 'fixed-temperature'
-    energy_inlet_function = '300'
+    energy_inlet_functors = '300'
     wall_boundaries = 'wall heated_wall'
     momentum_wall_types = 'slip slip'
     energy_wall_types = 'heatflux heatflux'
-    energy_wall_function = '0 300'
+    energy_wall_functors = '0 300'
     outlet_boundaries = 'top'
     momentum_outlet_types = 'fixed-pressure'
-    pressure_function = '0'
+    pressure_functors = '0'
+    energy_advection_interpolation = 'average'
     momentum_advection_interpolation = 'upwind'
     mass_advection_interpolation = 'upwind'
     friction_blocks = '1'
     friction_types = 'Darcy'
-    friction_coeffs = '2'
+    friction_coeffs = 'friction_coefficient'
+    standard_friction_formulation = false
   []
 []
 
@@ -85,11 +87,16 @@ head = ${fparse height * density * gravity}
   nl_rel_tol = 1e-8
 []
 
-[Materials]
+[FunctorMaterials]
   [props]
     type = ADGenericFunctorMaterial
     prop_names = 'rho'
     prop_values = '${density}'
+  []
+  [friction_coefficient]
+    type = ADGenericVectorFunctorMaterial
+    prop_names = 'friction_coefficient'
+    prop_values = '2 2 2'
   []
 []
 

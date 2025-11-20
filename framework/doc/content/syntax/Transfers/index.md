@@ -27,8 +27,8 @@ from the parent application.
                  that solves along with the parent as time progresses.
 
 For this example, the sub-applications require that the average from the parent in the form of a
-scalar AuxVariable, see the [AuxVariables] documentation for further information. Therefore the
-parent will transfer the average value (computed via the
+scalar AuxVariable, see the [AuxVariables](/AuxVariables/index.md) documentation for further information.
+Therefore the parent will transfer the average value (computed via the
 [ElementAverageValue](/ElementAverageValue.md) Postprocessor) to a scalar AuxVariable on each
 sub-application. As shown in [transfers-parent-transfers], the
 [MultiAppPostprocessorToAuxScalarTransfer](/MultiAppPostprocessorToAuxScalarTransfer.md) is provided
@@ -133,6 +133,11 @@ where the "to" point is (1, 0), then selection of the "from" point is arbitrary
 if both (1, 0, 0) and (0, 1, 0) points (or any combination of $\sqrt{x^2+y^2}=1$
 points) exist. We are considering how best to handle these situations moving
 forward. One option would be to average the field data from equivalent points.
+
+!alert warning title=Only translation allowed for general axisymmetric coordinates
+For the `RZ` coordinate system with general axes (see [Mesh/index.md#coordinate_systems]),
+only translation is supported for coordinate transformations, i.e., there is
+no scaling, rotation, or coordinate collapsing.
 
 Framework transfer classes that support the coordinate transformation
 processes described here are:

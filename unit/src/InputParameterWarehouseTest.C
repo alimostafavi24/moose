@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -7,21 +7,21 @@
 //* Licensed under LGPL 2.1, please see LICENSE for details
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
-#include "gtest/gtest.h"
 #include "InputParameterWarehouse.h"
 #include "InputParameters.h"
+#include "MooseBase.h"
 
-TEST(InputParameterWarehouse, getControllableItems)
+TEST(InputParameterWarehouseTest, getControllableItems)
 {
   // One item
   {
     InputParameters in_params = emptyInputParameters();
-    in_params.addPrivateParam<std::string>("_moose_base", "Base");
+    in_params.registerBase("Base");
     in_params.addParam<int>("control", 1949, "");
     in_params.declareControllable("control");
 
     InputParameterWarehouse wh;
-    const InputParameters & params = wh.addInputParameters("Object", in_params);
+    const InputParameters & params = wh.addInputParameters("Object", in_params, 0, {});
 
     MooseObjectParameterName name("Base", "Object", "control");
     auto items = wh.getControllableItems(name);
@@ -40,14 +40,14 @@ TEST(InputParameterWarehouse, getControllableItems)
   // Many items
   {
     InputParameters in_params = emptyInputParameters();
-    in_params.addPrivateParam<std::string>("_moose_base", "Base");
+    in_params.registerBase("Base");
     in_params.addParam<int>("control", 1949, "");
     in_params.addParam<int>("control2", 1954, "");
 
     in_params.declareControllable("control control2");
 
     InputParameterWarehouse wh;
-    const InputParameters & params = wh.addInputParameters("Object", in_params);
+    const InputParameters & params = wh.addInputParameters("Object", in_params, 0, {});
 
     MooseObjectParameterName name("Base", "Object", "*");
     auto items = wh.getControllableItems(name);
@@ -70,17 +70,17 @@ TEST(InputParameterWarehouse, getControllableItems)
   }
 }
 
-TEST(InputParameterWarehouse, getControllableParameter)
+TEST(InputParameterWarehouseTest, getControllableParameter)
 {
   InputParameters in_params = emptyInputParameters();
-  in_params.addPrivateParam<std::string>("_moose_base", "Base");
+  in_params.registerBase("Base");
   in_params.addParam<int>("control", 2011, "");
   in_params.addParam<int>("control2", 2013, "");
   in_params.addParam<int>("no_control", 2009, "");
   in_params.declareControllable("control control2");
 
   InputParameterWarehouse wh;
-  const InputParameters & params = wh.addInputParameters("Object", in_params);
+  const InputParameters & params = wh.addInputParameters("Object", in_params, 0, {});
 
   MooseObjectParameterName name("Base", "Object", "*");
   auto cp = wh.getControllableParameter(name);
@@ -97,15 +97,15 @@ TEST(InputParameterWarehouse, getControllableParameter)
   EXPECT_EQ(params.get<int>("control2"), 2009);
 }
 
-TEST(InputParameterWarehouse, getControllableParameterValues)
+TEST(InputParameterWarehouseTest, getControllableParameterValues)
 {
   InputParameters in_params = emptyInputParameters();
-  in_params.addPrivateParam<std::string>("_moose_base", "Base");
+  in_params.registerBase("Base");
   in_params.addParam<int>("control", 2011, "");
   in_params.declareControllable("control");
 
   InputParameterWarehouse wh;
-  wh.addInputParameters("Object", in_params);
+  wh.addInputParameters("Object", in_params, 0, {});
 
   MooseObjectParameterName name("Base", "Object", "*");
   std::vector<int> values = wh.getControllableParameterValues<int>(name);
@@ -114,15 +114,15 @@ TEST(InputParameterWarehouse, getControllableParameterValues)
   EXPECT_EQ(values, std::vector<int>(1, 2011));
 }
 
-TEST(InputParameterWarehouse, emptyControllableParameterValues)
+TEST(InputParameterWarehouseTest, emptyControllableParameterValues)
 {
   InputParameters in_params = emptyInputParameters();
-  in_params.addPrivateParam<std::string>("_moose_base", "Base");
+  in_params.registerBase("Base");
   in_params.addParam<int>("control", 2011, "");
   in_params.declareControllable("control");
 
   InputParameterWarehouse wh;
-  wh.addInputParameters("Object", in_params);
+  wh.addInputParameters("Object", in_params, 0, {});
 
   MooseObjectParameterName name("Base", "Object", "asdf");
   std::vector<int> values = wh.getControllableParameterValues<int>(name);
@@ -130,19 +130,19 @@ TEST(InputParameterWarehouse, emptyControllableParameterValues)
   ASSERT_TRUE(values.empty());
 }
 
-TEST(InputParameterWarehouse, addControllableParameterConnection)
+TEST(InputParameterWarehouseTest, addControllableParameterConnection)
 {
   // One-to-one
   {
     InputParameters in_params = emptyInputParameters();
-    in_params.addPrivateParam<std::string>("_moose_base", "Base");
+    in_params.registerBase("Base");
     in_params.addParam<int>("control", 1949, "");
     in_params.declareControllable("control");
 
     InputParameterWarehouse wh;
-    const InputParameters & params0 = wh.addInputParameters("Object0", in_params);
+    const InputParameters & params0 = wh.addInputParameters("Object0", in_params, 0, {});
     in_params.set<int>("control") = 1954;
-    const InputParameters & params1 = wh.addInputParameters("Object1", in_params);
+    const InputParameters & params1 = wh.addInputParameters("Object1", in_params, 0, {});
 
     MooseObjectParameterName name0("Base", "Object0", "control");
     MooseObjectParameterName name1("Base", "Object1", "control");
@@ -165,18 +165,18 @@ TEST(InputParameterWarehouse, addControllableParameterConnection)
   // One-to-many
   {
     InputParameters in_params = emptyInputParameters();
-    in_params.addPrivateParam<std::string>("_moose_base", "Base");
+    in_params.registerBase("Base");
     in_params.addParam<int>("control", 1949, "");
     in_params.declareControllable("control");
 
     InputParameterWarehouse wh;
-    const InputParameters & params0 = wh.addInputParameters("Object0", in_params);
+    const InputParameters & params0 = wh.addInputParameters("Object0", in_params, 0, {});
 
     in_params.set<int>("control") = 2011;
-    in_params.set<std::string>("_moose_base") = "Base2";
-    const InputParameters & params1 = wh.addInputParameters("Object1", in_params);
+    in_params.registerBase("Base2");
+    const InputParameters & params1 = wh.addInputParameters("Object1", in_params, 0, {});
     in_params.set<int>("control") = 2013;
-    const InputParameters & params2 = wh.addInputParameters("Object2", in_params);
+    const InputParameters & params2 = wh.addInputParameters("Object2", in_params, 0, {});
 
     MooseObjectParameterName name0("Base", "Object0", "control");
     MooseObjectParameterName name1("Base2", "*", "control");
@@ -204,18 +204,18 @@ TEST(InputParameterWarehouse, addControllableParameterConnection)
   // Many-to-one
   {
     InputParameters in_params = emptyInputParameters();
-    in_params.addPrivateParam<std::string>("_moose_base", "Base");
+    in_params.registerBase("Base");
     in_params.addParam<int>("control", 1949, "");
     in_params.declareControllable("control");
 
     InputParameterWarehouse wh;
-    const InputParameters & params0 = wh.addInputParameters("Object0", in_params);
+    const InputParameters & params0 = wh.addInputParameters("Object0", in_params, 0, {});
 
     in_params.set<int>("control") = 2011;
-    in_params.set<std::string>("_moose_base") = "Base2";
-    const InputParameters & params1 = wh.addInputParameters("Object1", in_params);
+    in_params.registerBase("Base2");
+    const InputParameters & params1 = wh.addInputParameters("Object1", in_params, 0, {});
     in_params.set<int>("control") = 2013;
-    const InputParameters & params2 = wh.addInputParameters("Object2", in_params);
+    const InputParameters & params2 = wh.addInputParameters("Object2", in_params, 0, {});
 
     MooseObjectParameterName name0("Base", "Object0", "control");
     MooseObjectParameterName name1("Base2", "Object1", "control");
@@ -270,20 +270,20 @@ TEST(InputParameterWarehouse, addControllableParameterConnection)
   // Many-to-many
   {
     InputParameters in_params = emptyInputParameters();
-    in_params.addPrivateParam<std::string>("_moose_base", "Base");
+    in_params.registerBase("Base");
     in_params.addParam<int>("control", 1949, "");
     in_params.declareControllable("control");
 
     InputParameterWarehouse wh;
-    const InputParameters & params0 = wh.addInputParameters("Object0", in_params);
+    const InputParameters & params0 = wh.addInputParameters("Object0", in_params, 0, {});
     in_params.addParam<int>("control", 1954, "");
-    const InputParameters & params1 = wh.addInputParameters("Object1", in_params);
+    const InputParameters & params1 = wh.addInputParameters("Object1", in_params, 0, {});
 
     in_params.set<int>("control") = 2011;
-    in_params.set<std::string>("_moose_base") = "Base2";
-    const InputParameters & params2 = wh.addInputParameters("Object2", in_params);
+    in_params.registerBase("Base2");
+    const InputParameters & params2 = wh.addInputParameters("Object2", in_params, 0, {});
     in_params.set<int>("control") = 2013;
-    const InputParameters & params3 = wh.addInputParameters("Object3", in_params);
+    const InputParameters & params3 = wh.addInputParameters("Object3", in_params, 0, {});
 
     MooseObjectParameterName name0("Base", "Object0", "control");
     MooseObjectParameterName name1("Base", "Object1", "control");
@@ -395,15 +395,15 @@ TEST(InputParameterWarehouse, addControllableParameterConnection)
   }
 }
 
-TEST(InputParameterWarehouse, addControllableParameterAlias)
+TEST(InputParameterWarehouseTest, addControllableParameterAlias)
 {
   InputParameters in_params = emptyInputParameters();
-  in_params.addPrivateParam<std::string>("_moose_base", "Base");
+  in_params.registerBase("Base");
   in_params.addParam<int>("control", 1949, "");
   in_params.declareControllable("control");
 
   InputParameterWarehouse wh;
-  const InputParameters & params = wh.addInputParameters("Object", in_params);
+  const InputParameters & params = wh.addInputParameters("Object", in_params, 0, {});
 
   MooseObjectParameterName alias("not", "a", "param");
   MooseObjectParameterName secondary("Base", "Object", "control");

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -15,8 +15,8 @@
 #include "Problem.h"
 #include "NonlinearSystem.h"
 #include "MooseVariableFE.h"
-#include "DiracKernel.h"
 #include "Assembly.h"
+#include "ThreadedElementLoop.h"
 
 #include "libmesh/threads.h"
 
@@ -60,7 +60,7 @@ ComputeDiracThread::subdomainChanged()
   _dirac_kernels.updateVariableDependency(needed_moose_vars, _tid);
 
   // Update material dependencies
-  std::set<unsigned int> needed_mat_props;
+  std::unordered_set<unsigned int> needed_mat_props;
   _dirac_kernels.updateMatPropDependency(needed_mat_props, _tid);
 
   _fe_problem.setActiveElementalMooseVariables(needed_moose_vars, _tid);
@@ -148,7 +148,6 @@ ComputeDiracThread::onElement(const Elem * elem)
 void
 ComputeDiracThread::postElement(const Elem * /*elem*/)
 {
-  Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
   if (!_is_jacobian)
     _fe_problem.addResidual(_tid);
   else
@@ -165,4 +164,28 @@ ComputeDiracThread::post()
 void
 ComputeDiracThread::join(const ComputeDiracThread & /*y*/)
 {
+}
+
+void
+ComputeDiracThread::printGeneralExecutionInformation() const
+{
+  if (!_fe_problem.shouldPrintExecution(_tid))
+    return;
+  const auto & console = _fe_problem.console();
+  console << "[DBG] Executing Dirac Kernels on " << _fe_problem.getCurrentExecuteOnFlag().name()
+          << std::endl;
+}
+
+void
+ComputeDiracThread::printBlockExecutionInformation() const
+{
+  if (!_fe_problem.shouldPrintExecution(_tid) || _blocks_exec_printed.count(_subdomain) ||
+      !_dirac_warehouse->hasActiveBlockObjects(_subdomain, _tid))
+    return;
+
+  const auto & dkernels = _dirac_warehouse->getActiveBlockObjects(_subdomain, _tid);
+  const auto & console = _fe_problem.console();
+  console << "[DBG] Ordering of DiracKernels on subdomain " << _subdomain << std::endl;
+  printExecutionOrdering<DiracKernelBase>(dkernels, false);
+  _blocks_exec_printed.insert(_subdomain);
 }

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -23,8 +23,16 @@ class MooseObject;
 class ElementIDInterface
 {
 public:
-  ElementIDInterface(const MooseObject * moose_object);
   static InputParameters validParams();
+
+  ElementIDInterface(const MooseObject * moose_object);
+
+#ifdef MOOSE_KOKKOS_ENABLED
+  /**
+   * Special constructor used for Kokkos functor copy during parallel dispatch
+   */
+  ElementIDInterface(const ElementIDInterface & object, const Moose::Kokkos::FunctorCopy & key);
+#endif
 
   virtual ~ElementIDInterface() {}
 
@@ -103,6 +111,15 @@ public:
   bool areElemIDsIdentical(const std::string & id_name1, const std::string & id_name2) const
   {
     return _id_mesh->areElemIDsIdentical(id_name1, id_name2);
+  }
+
+  /**
+   * Get the mapping from IDs of one extra element integer to another given the two integer names
+   */
+  std::unordered_map<dof_id_type, std::set<dof_id_type>>
+  getElemIDMapping(const std::string & id_name1, const std::string & id_name2) const
+  {
+    return _id_mesh->getElemIDMapping(id_name1, id_name2);
   }
 
   /**

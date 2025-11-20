@@ -171,13 +171,13 @@ restricted_blocks = '1'
     type = INSFVInletVelocityBC
     boundary = 'left'
     variable = u
-    function = '1'
+    functor = '1'
   []
   [inlet-v]
     type = INSFVInletVelocityBC
     boundary = 'left'
     variable = v
-    function = 0
+    functor = 0
   []
   [top-wall-u]
     type = INSFVNoSlipWallBC
@@ -234,9 +234,9 @@ restricted_blocks = '1'
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [ins_fv]
-    type = INSFVEnthalpyMaterial
+    type = INSFVEnthalpyFunctorMaterial
     temperature = 'temperature'
     rho = ${rho}
     block = ${restricted_blocks}

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -8,19 +8,17 @@
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
 #include "BoundaryRestrictableRequired.h"
-
 #include "InputParameters.h"
 
 InputParameters
 BoundaryRestrictableRequired::validParams()
 {
-
   // Create instance of InputParameters
   InputParameters params = emptyInputParameters();
 
   // Create user-facing 'boundary' input for restricting inheriting object to boundaries
   params.addRequiredParam<std::vector<BoundaryName>>(
-      "boundary", "The list of boundary IDs from the mesh where this boundary condition applies");
+      "boundary", "The list of boundary IDs from the mesh where this object applies");
 
   // A parameter for disabling error message for objects restrictable by boundary and block,
   // if the parameter is valid it was already set so don't do anything
@@ -35,3 +33,11 @@ BoundaryRestrictableRequired::BoundaryRestrictableRequired(const MooseObject * m
   : BoundaryRestrictable(moose_object, nodal)
 {
 }
+
+#ifdef MOOSE_KOKKOS_ENABLED
+BoundaryRestrictableRequired::BoundaryRestrictableRequired(
+    const BoundaryRestrictableRequired & object, const Moose::Kokkos::FunctorCopy & key)
+  : BoundaryRestrictable(object, key)
+{
+}
+#endif

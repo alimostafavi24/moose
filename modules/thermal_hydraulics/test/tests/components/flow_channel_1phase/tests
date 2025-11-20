@@ -1,39 +1,70 @@
 [Tests]
-  # physics
-  [phy:f_fn_3eqn]
-    type = 'CSVDiff'
-    input = 'phy.f_fn.3eqn.i'
-    csvdiff = 'phy.f_fn.3eqn_out.csv'
-    rel_err = 1e-10
-    ad_indexing_type = 'global'
+  design = 'FlowChannel1Phase.md'
+  issues = '#19830'
+
+  [physics]
+    requirement = 'The system shall simulate a single-phase flow channel'
+
+    [phy:f_fn_3eqn]
+      type = 'CSVDiff'
+      input = 'phy.f_fn.3eqn.i'
+      csvdiff = 'phy.f_fn.3eqn_out.csv'
+      rel_err = 1e-10
+      restep = false # Test is prescribed to abort on failed timestep
+      detail = 'with a friction factor provided by a function.'
+    []
+    [phy:par_fn]
+      type = 'CSVDiff'
+      input = 'phy.par_fn.i'
+      csvdiff = 'phy.par_fn_out.csv'
+      rel_err = 1e-10
+      restep = false # Test is prescribed to abort on failed timestep
+      detail = 'with a hydraulic diameter provided by a function.'
+    []
+    [phy:sub_discretization]
+      type = 'Exodiff'
+      input = 'phy.sub_discretization.i'
+      exodiff = 'phy.sub_discretization_out.e'
+      custom_cmp = 'phy.sub_discretization.exodiff'
+      # matching geometry at t=0
+      recover = false
+      detail = 'with multiple length subsections.'
+    []
+    [steady]
+      type = Exodiff
+      input = 'steady.i'
+      exodiff = 'steady_out.e'
+      detail = 'in a steady problem.'
+    []
   []
 
-  [phy:par_fn]
-    type = 'CSVDiff'
-    input = 'phy.par_fn.i'
-    csvdiff = 'phy.par_fn_out.csv'
-    rel_err = 1e-10
-    ad_indexing_type = 'global'
+  [output_vpps]
+    type = CSVDiff
+    input = 'output_vpps.i'
+    csvdiff = 'output_vpps_out_pipe_vars_vpp_0002.csv output_vpps_out_pipe_flux_vpp_0002.csv'
+    rel_err = 1e-6
+    requirement = 'The system shall be able to simulate a single-phase flow channel and output quantities to a CSV file.'
   []
 
-  [phy:sub_discretization]
-    type = 'Exodiff'
-    input = 'phy.sub_discretization.i'
-    exodiff = 'phy.sub_discretization_out.e'
-    custom_cmp = 'phy.sub_discretization.exodiff'
-    # matching geometry at t=0
-    recover = false
-    ad_indexing_type = 'global'
+  [components_convergence]
+    type = RunApp
+    input = 'components_convergence.i'
+    requirement = 'The system shall allow component-wise convergence criteria to be used.'
   []
-
-  # controls
 
   # error checking
   [err:wrong_fp]
     type = 'RunException'
     input = 'err.wrong_fp.i'
     expect_err = "pipe: Supplied fluid properties must be for 1-phase fluids."
-    ad_indexing_type = 'global'
+    requirement = 'The system shall report an error if fluid properties are not single-phase.'
+  []
+  [err:components_convergence_scaling]
+    type = RunException
+    input = 'components_convergence.i'
+    cli_args = "Components/pipe/scaling_factor_1phase='1 1 1e-5'"
+    expect_err = "pipe: When using ComponentsConvergence, 'scaling_factor_1phase' must be set to '1 1 1'"
+    requirement = 'The system shall report an error if non-unity scaling factors are used with the component convergence object.'
   []
 
   [jacobian]
@@ -44,6 +75,6 @@
     cli_args = 'Debug/check_jacobian=true'
     max_threads = 1
     max_parallel = 1
-    ad_indexing_type = 'global'
+    requirement = 'The system shall have correct Jacobians for the single-phase flow channel.'
   []
 []

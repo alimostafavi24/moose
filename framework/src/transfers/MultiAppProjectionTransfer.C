@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -26,10 +26,11 @@
 #include "libmesh/quadrature_gauss.h"
 #include "libmesh/sparse_matrix.h"
 #include "libmesh/string_to_enum.h"
-#include "libmesh/default_coupling.h"
 
 // TIMPI includes
 #include "timpi/parallel_sync.h"
+
+using namespace libMesh;
 
 void
 assemble_l2(EquationSystems & es, const std::string & system_name)
@@ -100,10 +101,6 @@ MultiAppProjectionTransfer::initialSetup()
                          .feType();
 
     LinearImplicitSystem & proj_sys = to_es.add_system<LinearImplicitSystem>("proj-sys-" + name());
-
-    proj_sys.get_dof_map().add_coupling_functor(
-        proj_sys.get_dof_map().default_coupling(),
-        false); // The false keeps it from getting added to the mesh
 
     _proj_var_num = proj_sys.add_variable("var", fe_type);
     proj_sys.attach_assemble_function(assemble_l2);
@@ -321,7 +318,7 @@ MultiAppProjectionTransfer::execute()
   }
 
   // Setup the local mesh functions.
-  std::vector<MeshFunction *> local_meshfuns(froms_per_proc[processor_id()], NULL);
+  std::vector<MeshFunction> local_meshfuns;
   for (unsigned int i_from = 0; i_from < _from_problems.size(); i_from++)
   {
     FEProblemBase & from_problem = *_from_problems[i_from];
@@ -330,11 +327,10 @@ MultiAppProjectionTransfer::execute()
     System & from_sys = from_var.sys().system();
     unsigned int from_var_num = from_sys.variable_number(from_var.name());
 
-    MeshFunction * from_func = new MeshFunction(
+    local_meshfuns.emplace_back(
         from_problem.es(), *from_sys.current_local_solution, from_sys.get_dof_map(), from_var_num);
-    from_func->init();
-    from_func->enable_out_of_mesh_mode(OutOfMeshValue);
-    local_meshfuns[i_from] = from_func;
+    local_meshfuns.back().init();
+    local_meshfuns.back().enable_out_of_mesh_mode(OutOfMeshValue);
   }
 
   // Recieve quadrature points from other processors, evaluate mesh frunctions
@@ -382,7 +378,7 @@ MultiAppProjectionTransfer::execute()
           const auto from_global_num =
               _current_direction == TO_MULTIAPP ? 0 : _from_local2global_map[i_from];
           outgoing_evals_ids[pid][qp].first =
-              (*local_meshfuns[i_from])(_from_transforms[from_global_num]->mapBack(qpt));
+              (local_meshfuns[i_from])(_from_transforms[from_global_num]->mapBack(qpt));
           if (_current_direction == FROM_MULTIAPP)
             outgoing_evals_ids[pid][qp].second = from_global_num;
         }
@@ -421,11 +417,10 @@ MultiAppProjectionTransfer::execute()
     FEType fe_type = system.variable_type(0);
     std::unique_ptr<FEBase> fe(FEBase::build(to_mesh.mesh_dimension(), fe_type));
     QGauss qrule(to_mesh.mesh_dimension(), fe_type.default_quadrature_order());
-    fe->attach_quadrature_rule(&qrule);
 
     for (const auto & elem : to_mesh.active_local_element_ptr_range())
     {
-      fe->reinit(elem);
+      qrule.init(*elem);
 
       bool element_is_evaled = false;
       std::vector<Real> evals(qrule.n_points(), 0.);
@@ -490,9 +485,6 @@ MultiAppProjectionTransfer::execute()
     _to_es[i_to]->parameters.set<std::vector<Real> *>("final_evals") = NULL;
     _to_es[i_to]->parameters.set<std::map<dof_id_type, unsigned int> *>("element_map") = NULL;
   }
-
-  for (unsigned int i = 0; i < _from_problems.size(); i++)
-    delete local_meshfuns[i];
 
   if (_fixed_meshes)
     _qps_cached = true;

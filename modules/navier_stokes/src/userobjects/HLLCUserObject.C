@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -53,6 +53,11 @@ HLLCUserObject::HLLCUserObject(const InputParameters & parameters)
 void
 HLLCUserObject::initialSetup()
 {
+  // This means that we have no finite volume variables, so we need to build the
+  // finite volume information on the mesh so that we can still use this object
+  if (!_face_info.size())
+    _mesh.setupFiniteVolumeMeshData();
+
   for (unsigned int j = 0; j < _face_info.size(); ++j)
   {
     const Elem * elem = &_face_info[j]->elem();
@@ -65,6 +70,8 @@ HLLCUserObject::initialSetup()
 void
 HLLCUserObject::execute()
 {
+  using std::sqrt, std::min, std::max;
+
   const FaceInfo & fi = faceInfoHelper(_current_elem, _current_side);
 
   const ADReal & rho1 = _rho_elem[_qp];
@@ -90,20 +97,20 @@ HLLCUserObject::execute()
   const Real eps2 = _eps_neighbor ? (*_eps_neighbor)[_qp] : 1.;
 
   // compute Roe-averaged variables
-  const ADReal sqrt_rho1 = std::sqrt(rho1);
-  const ADReal sqrt_rho2 = std::sqrt(rho2);
+  const ADReal sqrt_rho1 = sqrt(rho1);
+  const ADReal sqrt_rho2 = sqrt(rho2);
   const ADReal u_roe = (sqrt_rho1 * u1 + sqrt_rho2 * u2) / (sqrt_rho1 + sqrt_rho2);
   const ADReal q_roe = (sqrt_rho1 * q1 + sqrt_rho2 * q2) / (sqrt_rho1 + sqrt_rho2);
   const ADReal H_roe = (sqrt_rho1 * H1 + sqrt_rho2 * H2) / (sqrt_rho1 + sqrt_rho2);
   const ADReal h_roe = H_roe - 0.5 * u_roe * u_roe;
-  const ADReal rho_roe = std::sqrt(rho1 * rho2);
+  const ADReal rho_roe = sqrt(rho1 * rho2);
   const ADReal v_roe = 1.0 / rho_roe;
   const ADReal e_roe = _fluid.e_from_v_h(v_roe, h_roe);
   const ADReal c_roe = _fluid.c_from_v_e(v_roe, e_roe);
 
   // compute wave speeds
-  const ADReal SL = std::min(q1 - c1, q_roe - c_roe);
-  const ADReal SR = std::max(q2 + c2, q_roe + c_roe);
+  const ADReal SL = min(q1 - c1, q_roe - c_roe);
+  const ADReal SR = max(q2 + c2, q_roe + c_roe);
   const ADReal SM =
       (eps2 * rho2 * q2 * (SR - q2) - eps1 * rho1 * q1 * (SL - q1) + eps1 * p1 - eps2 * p2) /
       (eps2 * rho2 * (SR - q2) - eps1 * rho1 * (SL - q1));
@@ -123,7 +130,7 @@ HLLCUserObject::hasData(const Elem * const elem, const unsigned int side) const
 void
 HLLCUserObject::threadJoin(const UserObject & y)
 {
-  const HLLCUserObject & pps = static_cast<const HLLCUserObject &>(y);
+  const auto & pps = static_cast<const HLLCUserObject &>(y);
   for (auto & ws : pps._wave_speed)
   {
     const auto & it = _wave_speed.find(ws.first);

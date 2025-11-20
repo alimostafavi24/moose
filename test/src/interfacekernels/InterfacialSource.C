@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -28,7 +28,6 @@ InterfacialSource::validParams()
   params.addParam<FunctionName>("function", "1", "A function that describes the body force");
   params.addParam<PostprocessorName>(
       "postprocessor", 1, "A postprocessor whose value is multiplied by the body force");
-  params.set<bool>("_use_undisplaced_reference_points") = true;
   params.declareControllable("value");
   return params;
 }
@@ -37,8 +36,7 @@ InterfacialSource::InterfacialSource(const InputParameters & parameters)
   : InterfaceKernel(parameters),
     _scale(getParam<Real>("value")),
     _function(getFunction("function")),
-    _postprocessor(getPostprocessorValue("postprocessor")),
-    _neighbor_JxW(_assembly.JxWNeighbor())
+    _postprocessor(getPostprocessorValue("postprocessor"))
 {
 }
 
@@ -67,19 +65,7 @@ InterfacialSource::computeQpResidual(Moose::DGResidualType type)
 void
 InterfacialSource::computeElemNeighResidual(Moose::DGResidualType type)
 {
-  bool is_elem;
-  const MooseArray<Real> * JxW;
-
-  if (type == Moose::Element)
-  {
-    is_elem = true;
-    JxW = &_JxW;
-  }
-  else
-  {
-    is_elem = false;
-    JxW = &_neighbor_JxW;
-  }
+  const bool is_elem = (type == Moose::Element);
 
   const VariableTestValue & test_space = is_elem ? _test : _test_neighbor;
 
@@ -90,24 +76,19 @@ InterfacialSource::computeElemNeighResidual(Moose::DGResidualType type)
 
   for (_qp = 0; _qp < _qrule->n_points(); _qp++)
     for (_i = 0; _i < test_space.size(); _i++)
-      _local_re(_i) += (*JxW)[_qp] * _coord[_qp] * computeQpResidual(type);
+      _local_re(_i) += _JxW[_qp] * _coord[_qp] * computeQpResidual(type);
 
   accumulateTaggedLocalResidual();
 
   if (_has_primary_residuals_saved_in && is_elem)
-  {
-    Threads::spin_mutex::scoped_lock lock(_resid_vars_mutex);
     for (const auto & var : _primary_save_in_residual_variables)
-    {
       var->sys().solution().add_vector(_local_re, var->dofIndices());
-    }
-  }
   else if (_has_secondary_residuals_saved_in && !is_elem)
-  {
-    Threads::spin_mutex::scoped_lock lock(_resid_vars_mutex);
     for (const auto & var : _secondary_save_in_residual_variables)
       var->sys().solution().add_vector(_local_re, var->dofIndicesNeighbor());
-  }
 }
 
-void InterfacialSource::computeElemNeighJacobian(Moose::DGJacobianType) {}
+void
+InterfacialSource::computeElemNeighJacobian(Moose::DGJacobianType)
+{
+}

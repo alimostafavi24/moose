@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -167,13 +167,13 @@ public:
   /**
    * Retrieve the last time (or independent variable) value.
    */
-  Real getLastTime();
+  Real getLastTime() const;
 
   /**
    * Retrieve Data for last value of given name
    */
   template <typename T = Real>
-  T & getLastData(const std::string & name);
+  T & getLastData(const std::string & name) const;
 
   void clear();
 
@@ -206,7 +206,7 @@ public:
   void printCSV(const std::string & file_name, int interval = 1, bool align = false);
 
   void printEnsight(const std::string & file_name);
-  void writeExodus(ExodusII_IO * ex_out, Real time);
+  void writeExodus(libMesh::ExodusII_IO * ex_out, Real time);
   void makeGnuplot(const std::string & base_file, const std::string & format);
 
   static MooseEnum getWidthModes();
@@ -250,11 +250,6 @@ protected:
                       std::vector<std::string>::iterator & col_end) const;
 
   /**
-   * Returns the width of the terminal using sys/ioctl
-   */
-  unsigned short getTermWidth(bool use_environment) const;
-
-  /**
    * Data structure for the console table:
    * The first part of the pair tracks the independent variable (normally time) and is associated
    * with the second part of the table which is the map of dependent variables and their associated
@@ -284,8 +279,13 @@ private:
   void printRow(std::pair<Real, std::map<std::string, std::shared_ptr<TableValueBase>>> & row_data,
                 bool align);
 
-  /// Fill any values that are not defined (usually when there are mismatched column lengths)
-  void fillEmptyValues();
+  /**
+   *  Fill any values that are not defined (usually when there are mismatched column lengths)
+   *
+   *  If \p last_n_entries is non-zero, only values in that many final
+   *  rows will be examined and filled.
+   */
+  void fillEmptyValues(unsigned int last_n_entries = 0);
 
   /// The optional output file stream
   std::string _output_file_name;
@@ -399,7 +399,7 @@ FormattedTable::addData(const std::string & name, const std::vector<T> & vector)
 
 template <typename T>
 T &
-FormattedTable::getLastData(const std::string & name)
+FormattedTable::getLastData(const std::string & name) const
 {
   mooseAssert(!empty(), "No Data stored in the FormattedTable");
 

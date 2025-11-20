@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -15,6 +15,7 @@
 #include "MooseVariableScalar.h"
 #include "SubProblem.h"
 #include "NonlinearSystem.h"
+#include "FEProblemBase.h"
 
 #include "libmesh/threads.h"
 #include "libmesh/quadrature.h"
@@ -32,7 +33,7 @@ Kernel::Kernel(const InputParameters & parameters)
     MooseVariableInterface<Real>(this,
                                  false,
                                  "variable",
-                                 Moose::VarKindType::VAR_NONLINEAR,
+                                 Moose::VarKindType::VAR_SOLVER,
                                  Moose::VarFieldType::VAR_FIELD_STANDARD),
     _var(*mooseVariable()),
     _test(_var.phi()),
@@ -50,7 +51,7 @@ Kernel::Kernel(const InputParameters & parameters)
   {
     MooseVariable * var = &_subproblem.getStandardVariable(_tid, _save_in_strings[i]);
 
-    if (_fe_problem.getNonlinearSystemBase().hasVariable(_save_in_strings[i]))
+    if (_fe_problem.getNonlinearSystemBase(_sys.number()).hasVariable(_save_in_strings[i]))
       paramError("save_in", "cannot use solution variable as save-in variable");
 
     if (var->feType() != _var.feType())
@@ -70,7 +71,7 @@ Kernel::Kernel(const InputParameters & parameters)
   {
     MooseVariable * var = &_subproblem.getStandardVariable(_tid, _diag_save_in_strings[i]);
 
-    if (_fe_problem.getNonlinearSystemBase().hasVariable(_diag_save_in_strings[i]))
+    if (_fe_problem.getNonlinearSystemBase(_sys.number()).hasVariable(_diag_save_in_strings[i]))
       paramError("diag_save_in", "cannot use solution variable as diag save-in variable");
 
     if (var->feType() != _var.feType())
@@ -90,6 +91,9 @@ Kernel::Kernel(const InputParameters & parameters)
 void
 Kernel::computeResidual()
 {
+  if (!hasVectorTags())
+    return;
+
   prepareVectorTag(_assembly, _var.number());
 
   precalculateResidual();
@@ -100,11 +104,8 @@ Kernel::computeResidual()
   accumulateTaggedLocalResidual();
 
   if (_has_save_in)
-  {
-    Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
     for (const auto & var : _save_in)
       var->sys().solution().add_vector(_local_re, var->dofIndices());
-  }
 }
 
 void
@@ -123,7 +124,6 @@ Kernel::computeJacobian()
   if (_has_diag_save_in && !_sys.computingScalingJacobian())
   {
     DenseVector<Number> diag = _assembly.getJacobianDiagonal(_local_ke);
-    Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
     for (const auto & var : _diag_save_in)
       var->sys().solution().add_vector(diag, var->dofIndices());
   }
@@ -132,23 +132,27 @@ Kernel::computeJacobian()
 void
 Kernel::computeOffDiagJacobian(const unsigned int jvar_num)
 {
-  const auto & jvar = getVariable(jvar_num);
-
   if (jvar_num == _var.number())
     computeJacobian();
   else
   {
+    const auto & jvar = getVariable(jvar_num);
     prepareMatrixTag(_assembly, _var.number(), jvar_num);
 
-    // This (undisplaced) jvar could potentially yield the wrong phi size if this object is acting
-    // on the displaced mesh
-    auto phi_size = jvar.dofIndices().size();
+    // It's possible that this variable has not been requested for coupling anywhere for our
+    // associated system/assembly. E.g. in one ALE simulation, the displacement diffusion kernel
+    // runs on the reference mesh and all the velocity variable couplings are on the displaced mesh
+    if (jvar.dofIndices().empty())
+      return;
+
+    // phi_size may not be equal to _phi.size(), e.g. when jvar is a vector variable
+    const auto phi_size = jvar.phiSize();
     mooseAssert(
         phi_size * jvar.count() == _local_ke.n(),
         "The size of the phi container does not match the number of local Jacobian columns");
 
-    if (_local_ke.m() != _test.size())
-      return;
+    mooseAssert(_local_ke.m() == _test.size(),
+                "If these are not the same, then we shouldn't even be calling this method");
 
     precalculateOffDiagJacobian(jvar_num);
     if (jvar.count() == 1)
@@ -160,14 +164,15 @@ Kernel::computeOffDiagJacobian(const unsigned int jvar_num)
     }
     else
     {
-      unsigned int n = phi_size;
+      const auto n = cast_int<unsigned int>(phi_size);
       for (_i = 0; _i < _test.size(); _i++)
-        for (_j = 0; _j < n; _j++)
+        for (_j = 0; _j < phi_size; _j++)
           for (_qp = 0; _qp < _qrule->n_points(); _qp++)
           {
-            RealEigenVector v = _JxW[_qp] * _coord[_qp] *
-                                computeQpOffDiagJacobianArray(static_cast<ArrayMooseVariable &>(
-                                    const_cast<MooseVariableFieldBase &>(jvar)));
+            const RealEigenVector v =
+                _JxW[_qp] * _coord[_qp] *
+                computeQpOffDiagJacobianArray(
+                    static_cast<ArrayMooseVariable &>(const_cast<MooseVariableFieldBase &>(jvar)));
             for (unsigned int k = 0; k < v.size(); ++k)
               _local_ke(_i, _j + k * n) += v(k);
           }
@@ -189,4 +194,27 @@ Kernel::computeOffDiagJacobianScalar(const unsigned int jvar)
         _local_ke(_i, _j) += _JxW[_qp] * _coord[_qp] * computeQpOffDiagJacobianScalar(jvar);
 
   accumulateTaggedLocalMatrix();
+}
+
+void
+Kernel::computeResidualAndJacobian()
+{
+  computeResidual();
+
+  for (const auto & [ivariable, jvariable] : _fe_problem.couplingEntries(_tid, _sys.number()))
+  {
+    const unsigned int ivar = ivariable->number();
+    const unsigned int jvar = jvariable->number();
+
+    if (ivar != _var.number())
+      continue;
+
+    if (_is_implicit)
+    {
+      prepareShapes(jvar);
+      computeOffDiagJacobian(jvar);
+    }
+  }
+
+  /// TODO: add nonlocal Jacobians and scalar Jacobians
 }

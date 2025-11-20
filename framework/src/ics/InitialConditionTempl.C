@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -16,6 +16,8 @@
 #include "libmesh/fe_interface.h"
 #include "libmesh/quadrature.h"
 
+using namespace libMesh;
+
 template <typename T>
 InitialConditionTempl<T>::InitialConditionTempl(const InputParameters & parameters)
   : InitialConditionBase(parameters),
@@ -26,13 +28,14 @@ InitialConditionTempl<T>::InitialConditionTempl(const InputParameters & paramete
                                         parameters.get<VariableName>("variable"))),
     _fe_var(dynamic_cast<MooseVariableFE<T> *>(&_var)),
     _assembly(
-        _fe_problem.assembly(_tid, _var.kind() == Moose::VAR_NONLINEAR ? _var.sys().number() : 0)),
+        _fe_problem.assembly(_tid, _var.kind() == Moose::VAR_SOLVER ? _var.sys().number() : 0)),
     _coord_sys(_assembly.coordSystem()),
     _current_elem(_var.currentElem()),
     _current_elem_volume(_assembly.elemVolume()),
     _current_node(nullptr),
     _qp(0),
-    _fe_type(_var.feType())
+    _fe_type(_var.feType()),
+    _dof_indices(_var.dofIndices())
 {
 }
 
@@ -49,12 +52,11 @@ InitialConditionTempl<T>::compute()
   // The following code is a copy from libMesh project_vector.C plus it adds some features, so we
   // can couple variable values
   // and we also do not call any callbacks, but we use our initial condition system directly.
+  // Eventually we should try to fix things so we're not duplicating code
   // ------------
 
   // The dimension of the current element
   _dim = _current_elem->dim();
-  // The element type
-  const ElemType elem_type = _current_elem->type();
   // The number of nodes on the new element
   const unsigned int n_nodes = _current_elem->n_nodes();
 
@@ -92,10 +94,12 @@ InitialConditionTempl<T>::compute()
 
   // Update the DOF indices for this element based on the current mesh
   _var.prepareIC();
-  _dof_indices = _var.dofIndices();
 
-  // The number of DOFs on the element
-  const unsigned int n_dofs = _dof_indices.size();
+  // The number of DOFs on the element for this finite element type
+  const unsigned int n_dofs = _dof_indices.size() / _var.count();
+  mooseAssert(_dof_indices.size() % _var.count() == 0,
+              "The number of degrees of freedom should be cleanly divisible by the variable count");
+
   if (n_dofs == 0)
     return;
 
@@ -123,7 +127,7 @@ InitialConditionTempl<T>::compute()
 
   for (_n = 0; _n != n_nodes; ++_n)
   {
-    _nc = FEInterface::n_dofs_at_node(_dim, _fe_type, elem_type, _n);
+    _nc = FEInterface::n_dofs_at_node(_fe_type, _current_elem, _n);
 
     // for nodes that are in more than one subdomain, only compute the initial
     // condition once on the lowest numbered block
@@ -148,15 +152,13 @@ InitialConditionTempl<T>::compute()
       continue;
     }
 
-    // FIXME: this should go through the DofMap,
-    // not duplicate _dof_indices code badly!
     if (!_current_elem->is_vertex(_n))
     {
       _current_dof += _nc;
       continue;
     }
 
-    if (_cont == DISCONTINUOUS)
+    if (_cont == DISCONTINUOUS || _cont == H_CURL || _cont == H_DIV)
       libmesh_assert(_nc == 0);
     else if (_cont == C_ZERO)
       setCZeroVertices();
@@ -173,11 +175,15 @@ InitialConditionTempl<T>::compute()
   // From here on out we won't be sampling at nodes anymore
   _current_node = nullptr;
 
+  auto & dof_map = _var.dofMap();
+  const bool add_p_level =
+      dof_map.should_p_refine(dof_map.var_group_from_var_number(_var.number()));
+
   // In 3D, project any edge values next
   if (_dim > 2 && _cont != DISCONTINUOUS)
     for (unsigned int e = 0; e != _current_elem->n_edges(); ++e)
     {
-      FEInterface::dofs_on_edge(_current_elem, _dim, _fe_type, e, _side_dofs);
+      FEInterface::dofs_on_edge(_current_elem, _dim, _fe_type, e, _side_dofs, add_p_level);
 
       // Some edge dofs are on nodes and already
       // fixed, others are free to calculate
@@ -202,7 +208,7 @@ InitialConditionTempl<T>::compute()
   if (_dim > 1 && _cont != DISCONTINUOUS)
     for (unsigned int s = 0; s != _current_elem->n_sides(); ++s)
     {
-      FEInterface::dofs_on_side(_current_elem, _dim, _fe_type, s, _side_dofs);
+      FEInterface::dofs_on_side(_current_elem, _dim, _fe_type, s, _side_dofs, add_p_level);
 
       // Some side dofs are on nodes/edges and already
       // fixed, others are free to calculate
@@ -247,13 +253,9 @@ InitialConditionTempl<T>::compute()
   for (unsigned int i = 0; i != n_dofs; ++i)
     libmesh_assert(_dof_is_fixed[i]);
 
-  // Lock the new_vector since it is shared among threads.
-  {
-    Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
-    for (size_t i = 0; i < mask.size(); i++)
-      if (mask(i))
-        _var.setDofValue(_Ue(i), i);
-  }
+  for (size_t i = 0; i < mask.size(); i++)
+    if (mask(i))
+      _var.setDofValue(_Ue(i), i);
 }
 
 template <typename T>
@@ -435,7 +437,7 @@ InitialConditionTempl<T>::choleskyAssembly(bool is_volume)
     if (_cont == C_ONE)
       finegrad = gradient((*_xyz_values)[_qp]);
 
-    auto dofs_size = is_volume ? _dof_indices.size() : _side_dofs.size();
+    auto dofs_size = is_volume ? (_dof_indices.size() / _var.count()) : _side_dofs.size();
 
     // Form edge projection matrix
     for (decltype(dofs_size) geomi = 0, freei = 0; geomi != dofs_size; ++geomi)
@@ -472,7 +474,7 @@ InitialConditionTempl<T>::choleskyAssembly(bool is_volume)
 
 template <typename T>
 void
-InitialConditionTempl<T>::choleskySolve(bool is_volume)
+InitialConditionTempl<T>::choleskySolve(const bool is_volume)
 {
   _Ke.resize(_free_dofs, _free_dofs);
   _Ke.zero();
@@ -499,7 +501,7 @@ InitialConditionTempl<T>::choleskySolve(bool is_volume)
 
 template <>
 void
-InitialConditionTempl<RealEigenVector>::choleskySolve(bool is_volume)
+InitialConditionTempl<RealEigenVector>::choleskySolve(const bool is_volume)
 {
   _Ke.resize(_free_dofs, _free_dofs);
   _Ke.zero();
@@ -547,10 +549,7 @@ InitialConditionTempl<T>::computeNodal(const Point & p)
                                     // value is up-to-date
 
   // We are done, so update the solution vector
-  {
-    Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
-    _var.insert(_var.sys().solution());
-  }
+  _var.insert(_var.sys().solution());
 }
 
 template class InitialConditionTempl<Real>;

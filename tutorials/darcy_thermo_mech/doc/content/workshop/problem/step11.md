@@ -2,7 +2,7 @@
 
 !---
 
-Add custom syntax to build objects that are common to all Darcy thermal mecahnical problems:
+Add custom syntax to build objects that are common to all Darcy thermal mechanical problems:
 
 - Velocity auxiliary variables and kernels
 - Pressure kernel
@@ -38,14 +38,14 @@ Add custom syntax to build objects that are common to all Darcy thermal mecahnic
 
 ## Step 11: Input File
 
-!listing step11_action/problems/step11.i
+!listing step11_action/problems/step11.i diff=step09_mechanics/problems/step9.i
 
 !---
 
 ## Step 11: Run
 
 ```bash
-cd ~/projects/moose/tutorials/darcy-thermo_mech/step11_action
+cd ~/projects/moose/tutorials/darcy_thermo_mech/step11_action
 make -j 12 # use number of processors for your system
 cd problems
 ../darcy_thermo_mech-opt -i step11.i
@@ -56,3 +56,4 @@ cd problems
 ## Step 11: Results
 
 !media darcy_thermo_mech/step09_result.mp4
+       alt=Temperature and Von Mises stress values produced by the simulation above.

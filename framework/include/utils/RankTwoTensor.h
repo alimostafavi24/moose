@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -44,6 +44,14 @@ template <typename>
 class TypeTensor;
 template <typename>
 class TensorValue;
+namespace TensorTools
+{
+template <>
+struct IncrementRank<RankTwoTensor>
+{
+  typedef RankThreeTensor type;
+};
+}
 }
 
 namespace MathUtils
@@ -141,7 +149,7 @@ public:
   void printReal(std::ostream & stm = Moose::out) const;
 
   /// Print the Real part of the RankTwoTensorTempl<ADReal> along with its first nDual dual numbers
-  void printDualReal(unsigned int nDual, std::ostream & stm = Moose::out) const;
+  void printADReal(unsigned int nDual, std::ostream & stm = Moose::out) const;
 
   /// @}
 
@@ -473,7 +481,7 @@ public:
    * //         6 ]
    * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    */
-  VectorValue<T> column(const unsigned int i) const;
+  libMesh::VectorValue<T> column(const unsigned int i) const;
 
   /// @}
 
@@ -497,7 +505,7 @@ public:
    * //       7 4 1 ]
    * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    */
-  RankTwoTensorTempl<T> & operator=(const RankTwoTensorTempl<T> & a);
+  RankTwoTensorTempl<T> & operator=(const RankTwoTensorTempl<T> & a) = default;
 
   /**
    * @brief Assignment operator (from a ColumnMajorMatrixTempl<T>)
@@ -541,7 +549,8 @@ public:
    * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    */
   template <typename Scalar>
-  typename boostcopy::enable_if_c<ScalarTraits<Scalar>::value, RankTwoTensorTempl &>::type
+  typename libMesh::boostcopy::enable_if_c<libMesh::ScalarTraits<Scalar>::value,
+                                           RankTwoTensorTempl &>::type
   operator=(const Scalar & libmesh_dbg_var(p))
   {
     libmesh_assert_equal_to(p, Scalar(0));
@@ -940,7 +949,7 @@ public:
    * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    */
   template <typename T2>
-  RankTwoTensorTempl<typename CompareTypes<T, T2>::supertype>
+  RankTwoTensorTempl<typename libMesh::CompareTypes<T, T2>::supertype>
   operator+(const libMesh::TypeTensor<T2> & a) const;
 
   /**
@@ -962,7 +971,7 @@ public:
    * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    */
   template <typename T2>
-  RankTwoTensorTempl<typename CompareTypes<T, T2>::supertype>
+  RankTwoTensorTempl<typename libMesh::CompareTypes<T, T2>::supertype>
   operator-(const libMesh::TypeTensor<T2> & a) const;
 
   /**
@@ -995,8 +1004,9 @@ public:
    * //       6 12 18 ]
    * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    */
-  template <typename T2, typename std::enable_if<ScalarTraits<T2>::value, int>::type = 0>
-  RankTwoTensorTempl<typename CompareTypes<T, T2>::supertype> operator*(const T2 & a) const;
+  template <typename T2, typename std::enable_if<libMesh::ScalarTraits<T2>::value, int>::type = 0>
+  RankTwoTensorTempl<typename libMesh::CompareTypes<T, T2>::supertype>
+  operator*(const T2 & a) const;
 
   /**
    * Return this tensor divided by a scalar (component-wise)
@@ -1012,8 +1022,9 @@ public:
    * //       1.5 3.0 4.5 ]
    * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    */
-  template <typename T2, typename std::enable_if<ScalarTraits<T2>::value, int>::type = 0>
-  RankTwoTensorTempl<typename CompareTypes<T, T2>::supertype> operator/(const T2 & a) const;
+  template <typename T2, typename std::enable_if<libMesh::ScalarTraits<T2>::value, int>::type = 0>
+  RankTwoTensorTempl<typename libMesh::CompareTypes<T, T2>::supertype>
+  operator/(const T2 & a) const;
 
   /**
    * Return this tensor multiplied by a vector. \f$ b_i = A_{ij} a_j \f$
@@ -1034,7 +1045,7 @@ public:
    * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    */
   template <typename T2>
-  libMesh::TypeVector<typename CompareTypes<T, T2>::supertype>
+  libMesh::TypeVector<typename libMesh::CompareTypes<T, T2>::supertype>
   operator*(const libMesh::TypeVector<T2> & a) const;
 
   /**
@@ -1056,7 +1067,7 @@ public:
    * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    */
   template <typename T2>
-  RankTwoTensorTempl<typename CompareTypes<T, T2>::supertype>
+  RankTwoTensorTempl<typename libMesh::CompareTypes<T, T2>::supertype>
   operator*(const libMesh::TypeTensor<T2> & a) const;
 
   /**
@@ -1163,7 +1174,7 @@ public:
    * @brief Return the tensor product of this second order tensor with a vector \f$ C_{ijk} = A_{jk}
    * b_{i} \f$
    */
-  RankThreeTensorTempl<T> mixedProductJkI(const VectorValue<T> & b) const;
+  RankThreeTensorTempl<T> mixedProductJkI(const libMesh::VectorValue<T> & b) const;
 
   /**
    * @brief Return the positive projection tensor
@@ -1383,8 +1394,8 @@ struct RawType<RankTwoTensorTempl<T>>
   static value_type value(const RankTwoTensorTempl<T> & in)
   {
     value_type ret;
-    for (auto i : make_range(RankTwoTensorTempl<T>::N))
-      for (auto j : make_range(RankTwoTensorTempl<T>::N))
+    for (auto i : libMesh::make_range(RankTwoTensorTempl<T>::N))
+      for (auto j : libMesh::make_range(RankTwoTensorTempl<T>::N))
         ret(i, j) = raw_value(in(i, j));
 
     return ret;
@@ -1394,7 +1405,7 @@ struct RawType<RankTwoTensorTempl<T>>
 
 template <typename T>
 template <typename T2>
-RankTwoTensorTempl<typename CompareTypes<T, T2>::supertype>
+RankTwoTensorTempl<typename libMesh::CompareTypes<T, T2>::supertype>
 RankTwoTensorTempl<T>::operator+(const libMesh::TypeTensor<T2> & b) const
 {
   return libMesh::TensorValue<T>::operator+(b);
@@ -1402,15 +1413,15 @@ RankTwoTensorTempl<T>::operator+(const libMesh::TypeTensor<T2> & b) const
 
 template <typename T>
 template <typename T2>
-RankTwoTensorTempl<typename CompareTypes<T, T2>::supertype>
+RankTwoTensorTempl<typename libMesh::CompareTypes<T, T2>::supertype>
 RankTwoTensorTempl<T>::operator-(const libMesh::TypeTensor<T2> & b) const
 {
   return libMesh::TensorValue<T>::operator-(b);
 }
 
 template <typename T>
-template <typename T2, typename std::enable_if<ScalarTraits<T2>::value, int>::type>
-RankTwoTensorTempl<typename CompareTypes<T, T2>::supertype>
+template <typename T2, typename std::enable_if<libMesh::ScalarTraits<T2>::value, int>::type>
+RankTwoTensorTempl<typename libMesh::CompareTypes<T, T2>::supertype>
 RankTwoTensorTempl<T>::operator*(const T2 & b) const
 {
   return libMesh::TensorValue<T>::operator*(b);
@@ -1418,7 +1429,7 @@ RankTwoTensorTempl<T>::operator*(const T2 & b) const
 
 template <typename T>
 template <typename T2>
-libMesh::TypeVector<typename CompareTypes<T, T2>::supertype>
+libMesh::TypeVector<typename libMesh::CompareTypes<T, T2>::supertype>
 RankTwoTensorTempl<T>::operator*(const libMesh::TypeVector<T2> & b) const
 {
   return libMesh::TensorValue<T>::operator*(b);
@@ -1426,15 +1437,15 @@ RankTwoTensorTempl<T>::operator*(const libMesh::TypeVector<T2> & b) const
 
 template <typename T>
 template <typename T2>
-RankTwoTensorTempl<typename CompareTypes<T, T2>::supertype>
+RankTwoTensorTempl<typename libMesh::CompareTypes<T, T2>::supertype>
 RankTwoTensorTempl<T>::operator*(const libMesh::TypeTensor<T2> & b) const
 {
   return libMesh::TensorValue<T>::operator*(b);
 }
 
 template <typename T>
-template <typename T2, typename std::enable_if<ScalarTraits<T2>::value, int>::type>
-RankTwoTensorTempl<typename CompareTypes<T, T2>::supertype>
+template <typename T2, typename std::enable_if<libMesh::ScalarTraits<T2>::value, int>::type>
+RankTwoTensorTempl<typename libMesh::CompareTypes<T, T2>::supertype>
 RankTwoTensorTempl<T>::operator/(const T2 & b) const
 {
   return libMesh::TensorValue<T>::operator/(b);
@@ -1445,6 +1456,7 @@ RankFourTensorTempl<T>
 RankTwoTensorTempl<T>::positiveProjectionEigenDecomposition(std::vector<T> & eigval,
                                                             RankTwoTensorTempl<T> & eigvec) const
 {
+  using std::abs;
   if constexpr (MooseUtils::IsLikeReal<T>::value)
   {
     // Compute eigenvectors and eigenvalues of this tensor
@@ -1453,9 +1465,9 @@ RankTwoTensorTempl<T>::positiveProjectionEigenDecomposition(std::vector<T> & eig
     // Separate out positive and negative eigen values
     std::array<T, N> epos;
     std::array<T, N> d;
-    for (auto i : make_range(N))
+    for (auto i : libMesh::make_range(N))
     {
-      epos[i] = (std::abs(eigval[i]) + eigval[i]) / 2.0;
+      epos[i] = (abs(eigval[i]) + eigval[i]) / 2.0;
       d[i] = 0 < eigval[i] ? 1.0 : 0.0;
     }
 
@@ -1463,15 +1475,15 @@ RankTwoTensorTempl<T>::positiveProjectionEigenDecomposition(std::vector<T> & eig
     RankFourTensorTempl<T> proj_pos;
     RankFourTensorTempl<T> Gab, Gba;
 
-    for (auto a : make_range(N))
+    for (auto a : libMesh::make_range(N))
     {
       const auto Ma = RankTwoTensorTempl<T>::selfOuterProduct(eigvec.column(a));
       proj_pos += d[a] * Ma.outerProduct(Ma);
     }
 
     usingTensorIndices(i_, j_, k_, l_);
-    for (const auto a : make_range(N))
-      for (const auto b : make_range(a))
+    for (const auto a : libMesh::make_range(N))
+      for (const auto b : libMesh::make_range(a))
       {
         const auto Ma = RankTwoTensorTempl<T>::selfOuterProduct(eigvec.column(a));
         const auto Mb = RankTwoTensorTempl<T>::selfOuterProduct(eigvec.column(b));
@@ -1498,6 +1510,7 @@ template <typename T>
 T
 RankTwoTensorTempl<T>::sin3Lode(const T & r0, const T & r0_value) const
 {
+  using std::pow, std::max, std::sqrt, std::min;
   if constexpr (MooseUtils::IsLikeReal<T>::value)
   {
     T bar = secondInvariant();
@@ -1506,8 +1519,7 @@ RankTwoTensorTempl<T>::sin3Lode(const T & r0, const T & r0_value) const
       return r0_value;
     else
       // the min and max here gaurd against precision-loss when bar is tiny but nonzero.
-      return std::max(std::min(-1.5 * std::sqrt(3.0) * thirdInvariant() / std::pow(bar, 1.5), 1.0),
-                      -1.0);
+      return max(min(-1.5 * sqrt(3.0) * thirdInvariant() / pow(bar, 1.5), 1.0), -1.0);
   }
   else
     mooseError("sin3Lode is only available for ordered tensor component types");
@@ -1517,15 +1529,16 @@ template <typename T>
 RankTwoTensorTempl<T>
 RankTwoTensorTempl<T>::dsin3Lode(const T & r0) const
 {
+  using std::sqrt, std::pow;
   if constexpr (MooseUtils::IsLikeReal<T>::value)
   {
     T bar = secondInvariant();
     if (bar <= r0)
       return RankTwoTensorTempl<T>();
     else
-      return -1.5 * std::sqrt(3.0) *
-             (dthirdInvariant() / std::pow(bar, 1.5) -
-              1.5 * dsecondInvariant() * thirdInvariant() / std::pow(bar, 2.5));
+      return -1.5 * sqrt(3.0) *
+             (dthirdInvariant() / pow(bar, 1.5) -
+              1.5 * dsecondInvariant() * thirdInvariant() / pow(bar, 2.5));
   }
   else
     mooseError("dsin3Lode is only available for ordered tensor component types");
@@ -1535,6 +1548,7 @@ template <typename T>
 RankFourTensorTempl<T>
 RankTwoTensorTempl<T>::d2sin3Lode(const T & r0) const
 {
+  using std::pow, std::sqrt;
   if constexpr (MooseUtils::IsLikeReal<T>::value)
   {
     T bar = secondInvariant();
@@ -1544,18 +1558,18 @@ RankTwoTensorTempl<T>::d2sin3Lode(const T & r0) const
     T J3 = thirdInvariant();
     RankTwoTensorTempl<T> dII = dsecondInvariant();
     RankTwoTensorTempl<T> dIII = dthirdInvariant();
-    RankFourTensorTempl<T> deriv = d2thirdInvariant() / std::pow(bar, 1.5) -
-                                   1.5 * d2secondInvariant() * J3 / std::pow(bar, 2.5);
+    RankFourTensorTempl<T> deriv =
+        d2thirdInvariant() / pow(bar, 1.5) - 1.5 * d2secondInvariant() * J3 / pow(bar, 2.5);
 
     for (unsigned i = 0; i < N; ++i)
       for (unsigned j = 0; j < N; ++j)
         for (unsigned k = 0; k < N; ++k)
           for (unsigned l = 0; l < N; ++l)
-            deriv(i, j, k, l) += (-1.5 * dII(i, j) * dIII(k, l) - 1.5 * dIII(i, j) * dII(k, l)) /
-                                     std::pow(bar, 2.5) +
-                                 1.5 * 2.5 * dII(i, j) * dII(k, l) * J3 / std::pow(bar, 3.5);
+            deriv(i, j, k, l) +=
+                (-1.5 * dII(i, j) * dIII(k, l) - 1.5 * dIII(i, j) * dII(k, l)) / pow(bar, 2.5) +
+                1.5 * 2.5 * dII(i, j) * dII(k, l) * J3 / pow(bar, 3.5);
 
-    deriv *= -1.5 * std::sqrt(3.0);
+    deriv *= -1.5 * sqrt(3.0);
     return deriv;
   }
   else

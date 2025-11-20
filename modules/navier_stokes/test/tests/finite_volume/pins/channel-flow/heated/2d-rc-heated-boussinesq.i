@@ -188,13 +188,13 @@ velocity_interp_method = 'rc'
     type = INSFVInletVelocityBC
     boundary = 'bottom'
     variable = superficial_vel_x
-    function = 0
+    functor = 0
   []
   [inlet-v]
     type = INSFVInletVelocityBC
     boundary = 'bottom'
     variable = superficial_vel_y
-    function = ${v_inlet}
+    functor = ${v_inlet}
   []
   [inlet-T]
     type = FVNeumannBC
@@ -248,7 +248,7 @@ velocity_interp_method = 'rc'
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [constants]
     type = ADGenericFunctorMaterial
     prop_names = 'h_cv alpha_b'
@@ -261,7 +261,7 @@ velocity_interp_method = 'rc'
   []
 
   [ins_fv]
-    type = INSFVEnthalpyMaterial
+    type = INSFVEnthalpyFunctorMaterial
     rho = ${rho}
     temperature = 'T_fluid'
   []

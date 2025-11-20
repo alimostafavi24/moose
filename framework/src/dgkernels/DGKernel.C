@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -33,7 +33,7 @@ DGKernel::validParams()
 DGKernel::DGKernel(const InputParameters & parameters)
   : DGKernelBase(parameters),
     NeighborMooseVariableInterface(
-        this, false, Moose::VarKindType::VAR_NONLINEAR, Moose::VarFieldType::VAR_FIELD_STANDARD),
+        this, false, Moose::VarKindType::VAR_SOLVER, Moose::VarFieldType::VAR_FIELD_STANDARD),
     _var(*mooseVariable()),
     _u(_is_implicit ? _var.sln() : _var.slnOld()),
     _grad_u(_is_implicit ? _var.gradSln() : _var.gradSlnOld()),
@@ -133,15 +133,12 @@ DGKernel::computeElemNeighResidual(Moose::DGResidualType type)
   accumulateTaggedLocalResidual();
 
   if (_has_save_in)
-  {
-    Threads::spin_mutex::scoped_lock lock(_resid_vars_mutex);
     for (const auto & var : _save_in)
     {
       const std::vector<dof_id_type> & dof_indices =
           is_elem ? var->dofIndices() : var->dofIndicesNeighbor();
       var->sys().solution().add_vector(_local_re, dof_indices);
     }
-  }
 }
 
 void
@@ -174,7 +171,6 @@ DGKernel::computeElemNeighJacobian(Moose::DGJacobianType type)
     for (unsigned int i = 0; i < rows; i++)
       diag(i) = _local_ke(i, i);
 
-    Threads::spin_mutex::scoped_lock lock(_jacoby_vars_mutex);
     for (const auto & var : _diag_save_in)
     {
       if (type == Moose::ElementElement)

@@ -5,7 +5,9 @@ Multi-physics Object Oriented Simulation Environment
 
 !---
 
-!media darcy_thermo_mech/moose_intro.png style=width:75%;margin-left:auto;margin-right:auto;display:block;
+!media darcy_thermo_mech/moose_intro.png
+       style=width:75%;margin-left:auto;margin-right:auto;display:block;
+       alt=Promotional image showing some of the different types of physics MOOSE can capture when simulating a nuclear reactor core.
 
 !---
 
@@ -26,27 +28,22 @@ Multi-physics Object Oriented Simulation Environment
 
 ## MOOSE By The Numbers
 
-- 145 contributors
-- 40,000 commits
+- 250 contributors
+- 56,000 commits
 - 5000 unique visitors per month
-- ~6 new Discussion participants per week
-- 1240 citations for the MOOSE papers
+- ~40 new Discussion participants per week
+- 1500 citations for the MOOSE papers
 
   - Most cited paper in Elsevier Software-X
   - More than 500 publications using MOOSE
 
 - 30M tests per week
 
-
 !---
 
-## MOOSE Team
-
-!media darcy_thermo_mech/moose_team.png style=width:85%;margin-left:auto;margin-right:auto;display:block;
-
-!---
-
-!media darcy_thermo_mech/moose_design.png style=width:75%;margin-left:auto;margin-right:auto;display:block;
+!media darcy_thermo_mech/moose_design.png
+       style=width:75%;margin-left:auto;margin-right:auto;display:block;
+       alt=The MOOSE technology stack.
 
 !---
 
@@ -54,7 +51,7 @@ Multi-physics Object Oriented Simulation Environment
 
 - Continuous and Discontinuous Galerkin FEM
 - Finite Volume
-- Fully coupled, fully implicit (and explicit)
+- Supports fully coupled or segregated systems, fully implicit and explicit time integration
 - Automatic differentiation (AD)
 - Unstructured mesh with FEM shapes
 - Higher order geometry
@@ -63,7 +60,7 @@ Multi-physics Object Oriented Simulation Environment
 - User code agnostic of dimension, parallelism, shape functions, etc.
 - Operating Systems:
 
-  - Mac OSX
+  - macOS
   - Linux
   - Windows (WSL)
 
@@ -71,13 +68,17 @@ Multi-physics Object Oriented Simulation Environment
 
 ## Object-oriented, pluggable system
 
-!media darcy_thermo_mech/moose_systems.png style=width:75%;margin-left:auto;margin-right:auto;display:block;
+!media darcy_thermo_mech/moose_systems.png
+       style=width:75%;margin-left:auto;margin-right:auto;display:block;
+       alt=The components of MOOSE.
 
 !---
 
 ## Example Code
 
-!media darcy_thermo_mech/moose_code.png style=width:100%;margin-left:auto;margin-right:auto;display:block;box-shadow:none;
+!media darcy_thermo_mech/moose_code.png
+       style=width:100%;margin-left:auto;margin-right:auto;display:block;box-shadow:none;
+       alt=The relationship between the strong form of an equation, the weak form, and the code for one of the terms.
 
 !---
 
@@ -89,12 +90,15 @@ Multi-physics Object Oriented Simulation Environment
 - MOOSE includes a test suite and documentation system to allow for agile development while
   maintaining a NQA-1 process
 - Utilizes the Continuous Integration Environment for Verification, Enhancement, and Testing (CIVET)
+- External contributions are guided through the process by the team, and are very welcome!
 
 !---
 
 ## Development Process
 
-!media darcy_thermo_mech/civet_flow.png style=width:100%;margin-left:auto;margin-right:auto;display:block;
+!media darcy_thermo_mech/civet_flow.png
+       style=width:100%;margin-left:auto;margin-right:auto;display:block;
+       alt=Flowchart for developing MOOSE, including continuous integration.
 
 !---
 
@@ -102,15 +106,15 @@ Multi-physics Object Oriented Simulation Environment
 
 ###### https://github.com/idaholab/moose/discussions
 
-!media darcy_thermo_mech/moose_users.png style=width:50%;margin-left:auto;margin-right:auto;display:block;
+!media darcy_thermo_mech/moose_users.png
+       style=width:50%;margin-left:auto;margin-right:auto;display:block;
+       alt=Screenshot of MOOSE discussions on GitHub.
 
 !---
 
-!media darcy_thermo_mech/moose_contributors.png style=width:80%;margin-left:auto;margin-right:auto;display:block;background:white;
-
-!---
-
-!media darcy_thermo_mech/moose_add_del.png style=width:80%;margin-left:auto;margin-right:auto;display:block;background:white;
+!media darcy_thermo_mech/moose_contributors.png
+       style=width:80%;margin-left:auto;margin-right:auto;display:block;background:white;
+       alt=Plot of the total number of contributions and unique contributors to MOOSE, from 2008 to 2023.
 
 !---
 

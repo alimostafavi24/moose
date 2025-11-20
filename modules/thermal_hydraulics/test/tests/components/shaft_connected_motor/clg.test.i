@@ -5,7 +5,6 @@
       0 2
       1 3'
   []
-
   [inertia_fn]
     type = PiecewiseLinear
     xy_data = '
@@ -14,9 +13,9 @@
   []
 []
 
-[HeatStructureMaterials]
+[SolidProperties]
   [mat]
-    type = SolidMaterialProperties
+    type = ThermalFunctionSolidProperties
     rho = 1
     cp = 1
     k = 1
@@ -26,8 +25,8 @@
 [Components]
   [motor]
     type = ShaftConnectedMotor
-    inertia = 1
-    torque = 2
+    inertia = inertia_fn
+    torque = torque_fn
   []
 
   [shaft]
@@ -46,23 +45,24 @@
     names = '0'
     n_part_elems = 1
     widths = '1'
-    materials = 'mat'
+    solid_properties = 'mat'
+    solid_properties_T_ref = '300'
 
     initial_T = 300
   []
 []
 
-[ControlLogic]
-  [motor_ctrl]
-    type = TimeFunctionComponentControl
-    component = motor
-  []
-[]
-
 [Postprocessors]
-  [test]
-    type = RealComponentParameterValuePostprocessor
-    component = motor
+  [inertia]
+    type = ShaftConnectedComponentPostprocessor
+    shaft_connected_component_uo = motor:shaftconnected_uo
+    quantity = inertia
+    execute_on = 'initial timestep_end'
+  []
+  [torque]
+    type = ShaftConnectedComponentPostprocessor
+    shaft_connected_component_uo = motor:shaftconnected_uo
+    quantity = torque
     execute_on = 'initial timestep_end'
   []
 []
@@ -96,5 +96,5 @@
 
 [Outputs]
   csv = true
-  show = 'test'
+  show = 'torque inertia'
 []

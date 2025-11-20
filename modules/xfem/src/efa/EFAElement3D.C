@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -21,22 +21,26 @@
 #include "EFAError.h"
 #include "XFEMFuncs.h"
 
+#include "libmesh/int_range.h"
+
 EFAElement3D::EFAElement3D(unsigned int eid, unsigned int n_nodes, unsigned int n_faces)
   : EFAElement(eid, n_nodes),
     _num_faces(n_faces),
-    _faces(_num_faces, NULL),
+    _faces(_num_faces, nullptr),
     _face_neighbors(_num_faces),
     _face_edge_neighbors(_num_faces)
 {
   if (_num_faces == 4)
   {
     _num_vertices = 4;
-    if (_num_nodes == 10)
+    if (_num_nodes == 14)
+      _num_interior_face_nodes = 4;
+    else if (_num_nodes == 10)
       _num_interior_face_nodes = 3;
     else if (_num_nodes == 4)
       _num_interior_face_nodes = 0;
     else
-      EFAError("In EFAelement3D the supported TET element types are TET4 and TET10");
+      EFAError("In EFAelement3D the supported TET element types are TET4, TET10 and TET14");
   }
   else if (_num_faces == 6)
   {
@@ -51,14 +55,15 @@ EFAElement3D::EFAElement3D(unsigned int eid, unsigned int n_nodes, unsigned int 
       EFAError("In EFAelement3D the supported HEX element types are HEX8, HEX20 and HEX27");
   }
   else
-    EFAError("In EFAelement3D the supported element types are TET4, TET10, HEX8, HEX20 and HEX27");
+    EFAError("In EFAelement3D the supported element types are TET4, TET10, TET14, HEX8, HEX20 and "
+             "HEX27");
   setLocalCoordinates();
 }
 
 EFAElement3D::EFAElement3D(const EFAElement3D * from_elem, bool convert_to_local)
   : EFAElement(from_elem->_id, from_elem->_num_nodes),
     _num_faces(from_elem->_num_faces),
-    _faces(_num_faces, NULL),
+    _faces(_num_faces, nullptr),
     _face_neighbors(_num_faces),
     _face_edge_neighbors(_num_faces)
 {
@@ -116,37 +121,20 @@ EFAElement3D::EFAElement3D(const EFAElement3D * from_elem, bool convert_to_local
 EFAElement3D::~EFAElement3D()
 {
   for (unsigned int i = 0; i < _fragments.size(); ++i)
-  {
     if (_fragments[i])
-    {
       delete _fragments[i];
-      _fragments[i] = NULL;
-    }
-  }
+
   for (unsigned int i = 0; i < _faces.size(); ++i)
-  {
     if (_faces[i])
-    {
       delete _faces[i];
-      _faces[i] = NULL;
-    }
-  }
+
   for (unsigned int i = 0; i < _interior_nodes.size(); ++i)
-  {
     if (_interior_nodes[i])
-    {
       delete _interior_nodes[i];
-      _interior_nodes[i] = NULL;
-    }
-  }
+
   for (unsigned int i = 0; i < _local_nodes.size(); ++i)
-  {
     if (_local_nodes[i])
-    {
       delete _local_nodes[i];
-      _local_nodes[i] = NULL;
-    }
-  }
 }
 
 void
@@ -245,6 +233,13 @@ EFAElement3D::setLocalCoordinates()
                   1
 
     */
+    /*
+      TET14 elements also include four face nodes:
+      Node 10, centroid on side 0, arithmetic mean of 0/1/2 or 4/5/6
+      Node 11, centroid on side 1, arithmetic mean of 0/1/3 or 4/7/8
+      Node 12, centroid on side 2, arithmetic mean of 1/2/3 or 5/8/9
+      Node 13, centroid on side 3, arithmetic mean of 0/2/3 or 6/7/9
+    */
     _local_node_coor.resize(_num_nodes);
     _local_node_coor[0] = EFAPoint(0.0, 0.0, 0.0);
     _local_node_coor[1] = EFAPoint(1.0, 0.0, 0.0);
@@ -260,6 +255,14 @@ EFAElement3D::setLocalCoordinates()
       _local_node_coor[8] = EFAPoint(0.5, 0.0, 0.5);
       _local_node_coor[9] = EFAPoint(0.0, 0.5, 0.5);
     }
+
+    if (_num_nodes > 10)
+    {
+      _local_node_coor[10] = EFAPoint(1 / 3., 1 / 3., 0.0);
+      _local_node_coor[11] = EFAPoint(1 / 3., 0.0, 1 / 3.);
+      _local_node_coor[12] = EFAPoint(1 / 3., 1 / 3., 1 / 3.);
+      _local_node_coor[13] = EFAPoint(0.0, 1 / 3., 1 / 3.);
+    }
   }
   else
     EFAError("EFAElement3D: number of faces should be either 4(TET) or 6(HEX).");
@@ -274,7 +277,6 @@ EFAElement3D::numFragments() const
 bool
 EFAElement3D::isPartial() const
 {
-  bool partial = false;
   if (_fragments.size() > 0)
   {
     for (unsigned int i = 0; i < _num_vertices; ++i)
@@ -288,14 +290,12 @@ EFAElement3D::isPartial() const
           break;
         }
       } // j
+
       if (!node_in_frag)
-      {
-        partial = true;
-        break;
-      }
+        return true;
     } // i
   }
-  return partial;
+  return false;
 }
 
 void
@@ -418,7 +418,7 @@ EFAElement3D::getMasterInfo(EFANode * node,
   }
 
   if (!masters_found)
-    EFAError("In EFAelement3D::getMaterInfo, cannot find the given EFAnode");
+    EFAError("In EFAelement3D::getMasterInfo, cannot find the given EFANode");
 }
 
 unsigned int
@@ -436,7 +436,7 @@ EFAElement3D::overlaysElement(const EFAElement3D * other_elem) const
     EFAError("failed to dynamic cast to other3d");
 
   // Find indices of common nodes
-  std::vector<unsigned int> common_face_curr = getCommonFaceID(other3d);
+  const auto & common_face_curr = getCommonFaceID(other3d);
   if (common_face_curr.size() == 1)
   {
     unsigned int curr_face_id = common_face_curr[0];
@@ -504,28 +504,27 @@ EFAElement3D::clearNeighbors()
 }
 
 void
-EFAElement3D::setupNeighbors(std::map<EFANode *, std::set<EFAElement *>> & InverseConnectivityMap)
+EFAElement3D::setupNeighbors(std::map<EFANode *, std::set<EFAElement *>> & inverse_connectivity_map)
 {
-  findGeneralNeighbors(InverseConnectivityMap);
+  findGeneralNeighbors(inverse_connectivity_map);
+  std::vector<std::pair<unsigned int, unsigned int>> common_ids;
   for (unsigned int eit2 = 0; eit2 < _general_neighbors.size(); ++eit2)
   {
     EFAElement3D * neigh_elem = dynamic_cast<EFAElement3D *>(_general_neighbors[eit2]);
     if (!neigh_elem)
       EFAError("neighbor_elem is not of EFAelement3D type");
 
-    std::vector<unsigned int> common_face_id = getCommonFaceID(neigh_elem);
-    std::vector<unsigned int> face_ids, edge_ids;
-    if (common_face_id.size() == 0 && getCommonEdgeID(neigh_elem, face_ids, edge_ids) &&
+    const auto & common_face_id = getCommonFaceID(neigh_elem);
+    if (common_face_id.empty() && getCommonEdgeID(neigh_elem, common_ids) &&
         !overlaysElement(neigh_elem))
     {
       bool is_edge_neighbor = false;
 
       // Fragments must match up.
       if ((_fragments.size() > 1) || (neigh_elem->numFragments() > 1))
-      {
         EFAError("in updateFaceNeighbors: Cannot have more than 1 fragment");
-      }
-      else if ((_fragments.size() == 1) && (neigh_elem->numFragments() == 1))
+
+      if ((_fragments.size() == 1) && (neigh_elem->numFragments() == 1))
       {
         if (_fragments[0]->isEdgeConnected(neigh_elem->getFragment(0)))
           is_edge_neighbor = true;
@@ -534,14 +533,8 @@ EFAElement3D::setupNeighbors(std::map<EFANode *, std::set<EFAElement *>> & Inver
         is_edge_neighbor = true;
 
       if (is_edge_neighbor)
-      {
-        for (unsigned int i = 0; i < face_ids.size(); ++i)
-        {
-          unsigned int face_id = face_ids[i];
-          unsigned int edge_id = edge_ids[i];
+        for (const auto & [face_id, edge_id] : common_ids)
           _face_edge_neighbors[face_id][edge_id].push_back(neigh_elem);
-        }
-      }
     }
 
     if (common_face_id.size() == 1 && !overlaysElement(neigh_elem))
@@ -551,10 +544,9 @@ EFAElement3D::setupNeighbors(std::map<EFANode *, std::set<EFAElement *>> & Inver
 
       // Fragments must match up.
       if ((_fragments.size() > 1) || (neigh_elem->numFragments() > 1))
-      {
         EFAError("in updateFaceNeighbors: Cannot have more than 1 fragment");
-      }
-      else if ((_fragments.size() == 1) && (neigh_elem->numFragments() == 1))
+
+      if ((_fragments.size() == 1) && (neigh_elem->numFragments() == 1))
       {
         if (_fragments[0]->isConnected(neigh_elem->getFragment(0)))
           is_face_neighbor = true;
@@ -565,14 +557,12 @@ EFAElement3D::setupNeighbors(std::map<EFANode *, std::set<EFAElement *>> & Inver
       if (is_face_neighbor)
       {
         if (_face_neighbors[face_id].size() > 1)
-        {
           EFAError("Element ",
                    _id,
                    " already has 2 face neighbors: ",
                    _face_neighbors[face_id][0]->id(),
                    " ",
                    _face_neighbors[face_id][1]->id());
-        }
         _face_neighbors[face_id].push_back(neigh_elem);
       }
     }
@@ -587,7 +577,7 @@ EFAElement3D::neighborSanityCheck() const
     for (unsigned int en_iter = 0; en_iter < _face_neighbors[face_iter].size(); ++en_iter)
     {
       EFAElement3D * neigh_elem = _face_neighbors[face_iter][en_iter];
-      if (neigh_elem != NULL)
+      if (neigh_elem != nullptr)
       {
         bool found_neighbor = false;
         for (unsigned int face_iter2 = 0; face_iter2 < neigh_elem->numFaces(); ++face_iter2)
@@ -598,10 +588,8 @@ EFAElement3D::neighborSanityCheck() const
             if (neigh_elem->getFaceNeighbor(face_iter2, en_iter2) == this)
             {
               if ((en_iter2 > 1) && (en_iter > 1))
-              {
                 EFAError(
                     "Element and neighbor element cannot both have >1 neighbors on a common face");
-              }
               found_neighbor = true;
               break;
             }
@@ -1020,8 +1008,9 @@ EFAElement3D::createChild(const std::set<EFAElement *> & CrackTipElements,
 
       std::vector<EFAPoint> cut_plane_points;
 
-      EFAPoint normal(0.0, 0.0, 0.0);
       EFAPoint orig(0.0, 0.0, 0.0);
+
+      std::vector<EFAPoint> normal_v;
 
       if (cut_plane_nodes.size())
       {
@@ -1040,24 +1029,22 @@ EFAElement3D::createChild(const std::set<EFAElement *> & CrackTipElements,
           }
           cut_plane_points.push_back(coor);
         }
+
         for (unsigned int i = 0; i < cut_plane_points.size(); ++i)
           orig += cut_plane_points[i];
         orig /= cut_plane_points.size();
 
-        EFAPoint center(0.0, 0.0, 0.0);
-        for (unsigned int i = 0; i < cut_plane_points.size(); ++i)
-          center += cut_plane_points[i];
-        center /= cut_plane_points.size();
-
         for (unsigned int i = 0; i < cut_plane_points.size(); ++i)
         {
           unsigned int iplus1 = i < cut_plane_points.size() - 1 ? i + 1 : 0;
-          EFAPoint ray1 = cut_plane_points[i] - center;
-          EFAPoint ray2 = cut_plane_points[iplus1] - center;
-          normal += ray1.cross(ray2);
+          unsigned int iminus1 = i == 0 ? cut_plane_points.size() - 1 : i - 1;
+          EFAPoint ray1 = cut_plane_points[iminus1] - cut_plane_points[i];
+          EFAPoint ray2 = cut_plane_points[i] - cut_plane_points[iplus1];
+          normal_v.push_back(ray1.cross(ray2));
         }
-        normal /= cut_plane_points.size();
-        Xfem::normalizePoint(normal);
+
+        for (unsigned int i = 0; i < normal_v.size(); ++i)
+          Xfem::normalizePoint(normal_v[i]);
       }
 
       // get child element's nodes
@@ -1066,9 +1053,18 @@ EFAElement3D::createChild(const std::set<EFAElement *> & CrackTipElements,
         EFAPoint p(0.0, 0.0, 0.0);
         p = _local_node_coor[j];
         EFAPoint origin_to_point = p - orig;
+
+        bool node_outside_fragment = false;
+        for (unsigned int k = 0; k < normal_v.size(); ++k)
+          if (origin_to_point * normal_v[k] > Xfem::tol)
+          {
+            node_outside_fragment = true;
+            break;
+          }
+
         if (_fragments.size() == 1 && !shouldDuplicateForCrackTip(CrackTipElements))
           childElem->setNode(j, _nodes[j]); // inherit parent's node
-        else if (origin_to_point * normal < Xfem::tol)
+        else if (!node_outside_fragment)
           childElem->setNode(j, _nodes[j]); // inherit parent's node
         else                                // parent element's node is not in fragment
         {
@@ -1119,7 +1115,7 @@ EFAElement3D::removePhantomEmbeddedNode()
           if (!_fragments[0]->containsNode(edge->getEmbeddedNode(k)))
             nodes_to_delete.push_back(edge->getEmbeddedNode(k));
         } // k
-      }   // j
+      } // j
 
       // get emb nodes to be removed in the face interior
       for (unsigned int j = 0; j < _faces[i]->numInteriorNodes(); ++j)
@@ -1230,7 +1226,7 @@ EFAElement3D::connectNeighbors(std::map<unsigned int, EFANode *> & PermanentNode
                 EFANode * childNode = _faces[j]->getNode(childNodeIndex);
                 EFANode * childOfNeighborNode = neighborChildFace->getNode(neighborChildNodeIndex);
 
-                if (childNode->parent() != NULL &&
+                if (childNode->parent() != nullptr &&
                     childNode->parent() ==
                         childOfNeighborNode
                             ->parent()) // non-material node and both come from same parent
@@ -1242,10 +1238,10 @@ EFAElement3D::connectNeighbors(std::map<unsigned int, EFANode *> & PermanentNode
               } // i
             }
           } // loop over NeighborElem's children
-        }   // if (merge_phantom_edges)
-      }     // IF edge-j has_intersection()
-    }       // k, loop over neighbors on edge j
-  }         // j, loop over all faces
+        } // if (merge_phantom_edges)
+      } // IF edge-j has_intersection()
+    } // k, loop over neighbors on edge j
+  } // j, loop over all faces
 
   // Now do a second loop through faces and convert remaining nodes to permanent nodes.
   // If there is no neighbor on that face, also duplicate the embedded node if it exists
@@ -1463,9 +1459,10 @@ EFAElement3D::createFaces()
                                               {10, 14, 18, 15, 23},
                                               {11, 15, 19, 12, 24},
                                               {16, 17, 18, 19, 25}};
-  int tet_interior_face_node_indices[4][3] = {{4, 5, 6}, {4, 7, 8}, {5, 8, 9}, {6, 7, 9}};
+  int tet_interior_face_node_indices[4][4] = {
+      {4, 5, 6, 10}, {4, 7, 8, 11}, {5, 8, 9, 12}, {6, 7, 9, 13}};
 
-  _faces = std::vector<EFAFace *>(_num_faces, NULL);
+  _faces = std::vector<EFAFace *>(_num_faces, nullptr);
   if (_num_nodes == 8 || _num_nodes == 20 || _num_nodes == 27)
   {
     if (_num_faces != 6)
@@ -1480,7 +1477,7 @@ EFAElement3D::createFaces()
         _faces[i]->setInteriorFaceNode(k, _nodes[hex_interior_face_node_indices[i][k]]);
     }
   }
-  else if (_num_nodes == 4 || _num_nodes == 10)
+  else if (_num_nodes == 4 || _num_nodes == 10 || _num_nodes == 14)
   {
     if (_num_faces != 4)
       EFAError("num_faces of tets must be 4");
@@ -1538,51 +1535,48 @@ EFAElement3D::getCommonFaceID(const EFAElement3D * other_elem) const
 {
   std::vector<unsigned int> face_id;
   for (unsigned int i = 0; i < _num_faces; ++i)
-  {
     for (unsigned int j = 0; j < other_elem->_num_faces; ++j)
-    {
       if (_faces[i]->equivalent(other_elem->_faces[j]))
       {
         face_id.push_back(i);
         break;
       }
-    }
-  }
+
   return face_id;
 }
 
 bool
 EFAElement3D::getCommonEdgeID(const EFAElement3D * other_elem,
-                              std::vector<unsigned int> & face_id,
-                              std::vector<unsigned int> & edge_id) const
+                              std::vector<std::pair<unsigned int, unsigned int>> & common_ids) const
 {
-  bool has_common_edge = false;
-  bool move_to_next_edge = false;
-  face_id.clear();
-  edge_id.clear();
-  for (unsigned int i = 0; i < _num_faces; ++i)
-    for (unsigned int j = 0; j < _faces[i]->numEdges(); ++j)
+  // all edges of the other element
+  std::set<std::pair<EFANode *, EFANode *>> other_edges;
+  for (const auto k : index_range(other_elem->_faces))
+  {
+    const auto & face = *other_elem->_faces[k];
+    for (const auto l : make_range(other_elem->_faces[k]->numEdges()))
     {
-      move_to_next_edge = false;
-      for (unsigned int k = 0; k < other_elem->_num_faces; ++k)
-      {
-        for (unsigned int l = 0; l < other_elem->_faces[k]->numEdges(); ++l)
-          if ((_faces[i]->getEdge(j)->equivalent(*(other_elem->_faces[k]->getEdge(l)))) &&
-              !(_faces[i]->equivalent(other_elem->_faces[k])))
-          {
-            face_id.push_back(i);
-            edge_id.push_back(j);
-            move_to_next_edge = true;
-            has_common_edge = true;
-            break;
-          }
+      const auto & edge = *face.getEdge(l);
+      other_edges.insert(edge.getSortedNodes());
+    }
+  }
 
-        if (move_to_next_edge)
-          break;
-      }
+  // loop over all edges of this element
+  common_ids.clear();
+  for (const auto i : index_range(_faces))
+    for (const auto j : make_range(_faces[i]->numEdges()))
+    {
+      const auto & edge = *_faces[i]->getEdge(j);
+      const auto edge_nodes = edge.getSortedNodes();
+
+      // is this edge contained in the other element?
+      if (edge.isEmbeddedPermanent() || other_edges.count(edge_nodes) == 0)
+        continue;
+
+      common_ids.emplace_back(i, j);
     }
 
-  return has_common_edge;
+  return common_ids.size() > 0;
 }
 
 unsigned int
@@ -1682,7 +1676,7 @@ EFAElement3D::findFacesAdjacentToFaces()
   _faces_adjacent_to_faces.clear();
   for (unsigned int i = 0; i < _faces.size(); ++i)
   {
-    std::vector<EFAFace *> face_adjacents(_faces[i]->numEdges(), NULL);
+    std::vector<EFAFace *> face_adjacents(_faces[i]->numEdges(), nullptr);
     for (unsigned int j = 0; j < _faces.size(); ++j)
     {
       if (_faces[j] != _faces[i] && _faces[i]->isAdjacent(_faces[j]))
@@ -1849,7 +1843,7 @@ EFAElement3D::numEdgeNeighbors(unsigned int face_id, unsigned int edge_id) const
 EFAElement3D *
 EFAElement3D::getFaceNeighbor(unsigned int face_id, unsigned int neighbor_id) const
 {
-  if (_face_neighbors[face_id][0] != NULL && neighbor_id < _face_neighbors[face_id].size())
+  if (_face_neighbors[face_id][0] != nullptr && neighbor_id < _face_neighbors[face_id].size())
     return _face_neighbors[face_id][neighbor_id];
   else
     EFAError("edge neighbor does not exist");
@@ -1909,7 +1903,7 @@ EFAElement3D::getTipFaceIDs() const
         {
           if (_faces[i]->containsFace(_fragments[0]->getFace(j)))
             num_frag_faces += 1;
-        }                        // j
+        } // j
         if (num_frag_faces == 2) // element face contains two fragment edges
           tip_face_id.push_back(i);
       }
@@ -1934,7 +1928,7 @@ EFAElement3D::getTipEmbeddedNodes() const
         {
           if (_faces[i]->containsFace(_fragments[0]->getFace(j)))
             frag_faces.push_back(_fragments[0]->getFace(j));
-        }                           // j
+        } // j
         if (frag_faces.size() == 2) // element edge contains two fragment edges
         {
           unsigned int edge_id = frag_faces[0]->adjacentCommonEdge(frag_faces[1]);
@@ -1998,7 +1992,7 @@ EFAElement3D::addFaceEdgeCut(unsigned int face_id,
                              bool add_to_adjacent)
 {
   // Purpose: add intersection on Edge edge_id of Face face_id
-  EFANode * local_embedded = NULL;
+  EFANode * local_embedded = nullptr;
   EFAEdge * cut_edge = _faces[face_id]->getEdge(edge_id);
   EFANode * edge_node1 = cut_edge->getNode(0);
   if (embedded_node) // use the existing embedded node if it was passed in

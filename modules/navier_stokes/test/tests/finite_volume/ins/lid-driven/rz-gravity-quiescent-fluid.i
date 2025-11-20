@@ -19,9 +19,6 @@ rho = 1
     nx = 10
     ny = 10
   []
-[]
-
-[Problem]
   coord_type = 'RZ'
 []
 
@@ -154,7 +151,7 @@ rho = 1
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [mu]
     type = ADGenericFunctorMaterial
     prop_names = 'mu'

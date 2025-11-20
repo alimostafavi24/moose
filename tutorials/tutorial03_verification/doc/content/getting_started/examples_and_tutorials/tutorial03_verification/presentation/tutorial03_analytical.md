@@ -32,7 +32,9 @@ left boundary ($x=0$) and the natural boundary condition on the opposite boundar
 
 !---
 
-!media tutorial03_verification/1d_exact.mp4 style=width:75%;margin-left:auto;margin-right:auto;display:block;
+!media tutorial03_verification/1d_exact.mp4
+       style=width:75%;margin-left:auto;margin-right:auto;display:block;
+       alt=The analytic solution for the heat equation, evolving in time.
 
 !---
 
@@ -104,11 +106,11 @@ System.
 
 ## Practice: Run
 
-Executing the simulation is straightforward, simply execute the heat conduction module executable
+Executing the simulation is straightforward, simply execute the heat transfer module executable
 with the input file included using the "-i" option as follows.
 
 ```
-~/projects/moose/modules/heat_conduction/heat_conduction-opt -i 1d_analytical.i
+~/projects/moose/modules/heat_transfer/heat_conduction-opt -i 1d_analytical.i
 ```
 
 !---
@@ -134,7 +136,7 @@ then the names in "vars" can be used in the definition of the equation in the "v
 
 ### $L_2$ Error
 
-The $L_2$-norm of the differnce between the computed and exact solution
+The $L_2$-norm of the difference between the computed and exact solution
 can be computed using the `NodalL2Error` object. This is created within the `[Postprocessors]` block
 along with the average element size.
 
@@ -142,7 +144,9 @@ along with the average element size.
 
 !---
 
-!media tutorial03_verification/1d_analytical.mp4 style=width:75%;margin-left:auto;margin-right:auto;display:block;
+!media tutorial03_verification/1d_analytical.mp4
+       style=width:75%;margin-left:auto;margin-right:auto;display:block;
+       alt=Comparison of a MOOSE simulation to the analytic solution to the heat equation.
 
 !---
 
@@ -165,6 +169,7 @@ command line with "x" being an integer representing the number of refinements to
 !---
 
 !media tutorial03_verification/1d_analytical_spatial.png
+       alt=Plot of the L2 error of the heat equation simulation, as a function of element size.
 
 !---
 
@@ -179,6 +184,7 @@ For a temporal study, the time step is reduced.
 !---
 
 !media tutorial03_verification/1d_analytical_temporal.png
+       alt=Plot of the L2 error of the heat equation simulation, as a function of time-step size.
 
 !---
 

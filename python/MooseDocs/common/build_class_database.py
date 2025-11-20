@@ -1,5 +1,5 @@
 #* This file is part of the MOOSE framework
-#* https://www.mooseframework.org
+#* https://mooseframework.inl.gov
 #*
 #* All rights reserved, see COPYRIGHT for full restrictions
 #* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -10,6 +10,7 @@
 """Tools for extracting C++ class information."""
 import os
 import re
+import logging
 
 import mooseutils
 
@@ -17,17 +18,17 @@ import MooseDocs
 from .read import read
 
 #: Locates class definitions in header files
-# string starts with register(AD)MooseObject(Aliased)
+# string starts with register(AD)MooseObject(Aliased) or registerKokkos*
 # then the App name in double quotes, which must finish by App
 # then either a comma and one or more spaces, or a comma, spaces, a word (for aliased registration)
 # then the name of the registered class, captured in <class>, can be followed by quotes (alias)
 # then the registering function closing parenthesis and the C++ semicolon
-DEFINITION_RE = re.compile(r'register(|AD)MooseObject(|Aliased)\(\"\w+App\"(,\s+|,\s+\w+,\s+\")(?P<class>\w+)\"?\);')
+DEFINITION_RE = re.compile(r'(register(|AD)MooseObject(|Aliased)|registerKokkos\w+)\(\"\w+App\"(,\s+|,\s+\w+,\s+\")(?P<class>\w+)\"?\);')
 
 #: Locates class inheritance
 # <key> is captured as the first word after the 'public' word at the beginning of the expression
 # with a space before and with some text (or not) after
-CHILD_RE = re.compile(r'\bpublic\s+(?P<key>\w+)\b')
+CHILD_RE = re.compile(r'\b(public|protected|private)\s+(?P<key>\w+)\b')
 
 #: Locates class use in input files
 # expression starts with type, spaces or not, an equal, spaces or not
@@ -72,9 +73,22 @@ def build_class_database(source_dirs=None, include_dirs=None, input_dirs=None):
         input_dirs = [MooseDocs.ROOT_DIR]
 
     # Locate filenames
-    sources = _locate_filenames(source_dirs, '.C')
-    headers = _locate_filenames(include_dirs, '.h')
-    inputs = _locate_filenames(input_dirs, '.i')
+    LOG = logging.getLogger('MooseDocs.common.build_class_database')
+    try:
+        sources = _locate_filenames(source_dirs, ('.C', '.K'))
+    except FileNotFoundError as err:
+        LOG.warning(err)
+        sources = []
+    try:
+        headers = _locate_filenames(include_dirs, '.h')
+    except FileNotFoundError as err:
+        headers = []
+        LOG.warning(err)
+    try:
+        inputs = _locate_filenames(input_dirs, '.i')
+    except FileNotFoundError as err:
+        inputs = []
+        LOG.warning(err)
 
     # Create the database
     objects = dict()

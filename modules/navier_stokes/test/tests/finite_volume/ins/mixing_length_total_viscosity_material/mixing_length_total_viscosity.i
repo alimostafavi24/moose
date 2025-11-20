@@ -160,13 +160,13 @@ velocity_interp_method='rc'
     type = INSFVInletVelocityBC
     boundary = 'left'
     variable = vel_x
-    function = '1'
+    functor = '1'
   []
   [inlet-v]
     type = INSFVInletVelocityBC
     boundary = 'left'
     variable = vel_y
-    function = '0'
+    functor = '0'
   []
   [wall-u]
     type = INSFVWallFunctionBC
@@ -219,9 +219,9 @@ velocity_interp_method='rc'
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [total_viscosity]
-    type = MixingLengthTurbulentViscosityMaterial
+    type = MixingLengthTurbulentViscosityFunctorMaterial
     u = 'vel_x'                             #computes total viscosity = mu_t + mu
     v = 'vel_y'                             #property is called total_viscosity
     mixing_length = mixing_length

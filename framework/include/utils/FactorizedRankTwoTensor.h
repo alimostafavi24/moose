@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -146,6 +146,7 @@ namespace MathUtils
 {
 #define FactorizedRankTwoTensorOperatorMapBody(operator)                                           \
   {                                                                                                \
+    using std::log, std::exp, std::sqrt, std::cbrt, std::pow;                                      \
     std::vector<typename T::value_type> op_eigvals;                                                \
     for (const auto & eigval : A.eigvals())                                                        \
       op_eigvals.push_back(operator);                                                              \
@@ -165,7 +166,7 @@ namespace MathUtils
   FactorizedRankTwoTensorTempl<T> operatorname(const FactorizedRankTwoTensorTempl<T> & A,          \
                                                const T2 & arg)                                     \
   {                                                                                                \
-    if constexpr (ScalarTraits<T2>::value)                                                         \
+    if constexpr (libMesh::ScalarTraits<T2>::value)                                                \
     {                                                                                              \
       FactorizedRankTwoTensorOperatorMapBody(operator)                                             \
     }                                                                                              \
@@ -174,6 +175,7 @@ namespace MathUtils
 
 #define FactorizedRankTwoTensorOperatorMapDerivativeBody(operator, derivative)                     \
   {                                                                                                \
+    using std::log, std::exp, std::sqrt, std::cbrt, std::pow;                                      \
     std::vector<typename T::value_type> op_eigvals, op_derivs;                                     \
     for (const auto & eigval : A.eigvals())                                                        \
     {                                                                                              \
@@ -225,7 +227,7 @@ namespace MathUtils
   RankFourTensorTempl<typename T::value_type> derivativename(                                      \
       const FactorizedRankTwoTensorTempl<T> & A, const T2 & arg)                                   \
   {                                                                                                \
-    if constexpr (ScalarTraits<T2>::value)                                                         \
+    if constexpr (libMesh::ScalarTraits<T2>::value)                                                \
     {                                                                                              \
       FactorizedRankTwoTensorOperatorMapDerivativeBody(operator, derivative)                       \
     }                                                                                              \
@@ -235,26 +237,22 @@ namespace MathUtils
 // TODO: While the macros are here, in the future we could instantiate other operator maps like
 // trignometry functions.
 // @{
-FactorizedRankTwoTensorOperatorMapUnary(log, std::log(eigval));
-FactorizedRankTwoTensorOperatorMapDerivativeUnary(dlog, std::log(eigval), 1 / eigval);
+FactorizedRankTwoTensorOperatorMapUnary(log, log(eigval));
+FactorizedRankTwoTensorOperatorMapDerivativeUnary(dlog, log(eigval), 1 / eigval);
 
-FactorizedRankTwoTensorOperatorMapUnary(exp, std::exp(eigval));
-FactorizedRankTwoTensorOperatorMapDerivativeUnary(dexp, std::exp(eigval), std::exp(eigval));
+FactorizedRankTwoTensorOperatorMapUnary(exp, exp(eigval));
+FactorizedRankTwoTensorOperatorMapDerivativeUnary(dexp, exp(eigval), exp(eigval));
 
-FactorizedRankTwoTensorOperatorMapUnary(sqrt, std::sqrt(eigval));
-FactorizedRankTwoTensorOperatorMapDerivativeUnary(dsqrt,
-                                                  std::sqrt(eigval),
-                                                  std::pow(eigval, -1. / 2.) / 2.);
+FactorizedRankTwoTensorOperatorMapUnary(sqrt, sqrt(eigval));
+FactorizedRankTwoTensorOperatorMapDerivativeUnary(dsqrt, sqrt(eigval), pow(eigval, -1. / 2.) / 2.);
 
-FactorizedRankTwoTensorOperatorMapUnary(cbrt, std::cbrt(eigval));
-FactorizedRankTwoTensorOperatorMapDerivativeUnary(dcbrt,
-                                                  std::cbrt(eigval),
-                                                  std::pow(eigval, -2. / 3.) / 3.);
+FactorizedRankTwoTensorOperatorMapUnary(cbrt, cbrt(eigval));
+FactorizedRankTwoTensorOperatorMapDerivativeUnary(dcbrt, cbrt(eigval), pow(eigval, -2. / 3.) / 3.);
 
-FactorizedRankTwoTensorOperatorMapBinary(pow, std::pow(eigval, arg));
+FactorizedRankTwoTensorOperatorMapBinary(pow, pow(eigval, arg));
 FactorizedRankTwoTensorOperatorMapDerivativeBinary(dpow,
-                                                   std::pow(eigval, arg),
-                                                   arg * std::pow(eigval, arg - 1));
+                                                   pow(eigval, arg),
+                                                   arg * pow(eigval, arg - 1));
 // @}
 } // end namespace MathUtils
 
@@ -263,7 +261,7 @@ template <typename T2>
 FactorizedRankTwoTensorTempl<T>
 FactorizedRankTwoTensorTempl<T>::operator*(const T2 & a) const
 {
-  if constexpr (ScalarTraits<T2>::value)
+  if constexpr (libMesh::ScalarTraits<T2>::value)
   {
     FactorizedRankTwoTensorTempl<T> A = *this;
     for (auto & eigval : A._eigvals)
@@ -277,7 +275,7 @@ template <typename T2>
 FactorizedRankTwoTensorTempl<T>
 FactorizedRankTwoTensorTempl<T>::operator/(const T2 & a) const
 {
-  if constexpr (ScalarTraits<T2>::value)
+  if constexpr (libMesh::ScalarTraits<T2>::value)
   {
     FactorizedRankTwoTensorTempl<T> A = *this;
     for (auto & eigval : A._eigvals)

@@ -60,23 +60,41 @@ gamma = 1.4
     initial_temperature = ${T0}
     inlet_boundaries = 'bottom'
     momentum_inlet_types = 'fixed-pressure'
-    momentum_inlet_function = '${fparse p0 + head}'
+    momentum_inlet_functors = '${fparse p0 + head}'
     energy_inlet_types = 'fixed-temperature'
-    energy_inlet_function = '${T0}'
+    energy_inlet_functors = '${T0}'
     energy_scaling = 1e-5
     wall_boundaries = 'left right'
     momentum_wall_types = 'slip slip'
     energy_wall_types = 'heatflux heatflux'
-    energy_wall_function = '300 300'
+    energy_wall_functors = '300 300'
     outlet_boundaries = 'top'
     momentum_outlet_types = 'fixed-pressure'
-    pressure_function = '${fparse p0}'
+    pressure_functors = '${fparse p0}'
     momentum_advection_interpolation = 'upwind'
     mass_advection_interpolation = 'upwind'
-    friction_types = 'Darcy'
-    friction_coeffs = 'Darcy_coef'
     porous_medium_treatment = true
     porosity = porosity
+    energy_advection_interpolation = 'average'
+  []
+[]
+
+[FVKernels]
+  [u_friction]
+    type = PINSFVMomentumFriction
+    variable = superficial_vel_x
+    Darcy_name = linear_friction_coeff
+    momentum_component = 'x'
+    standard_friction_formulation = false
+    rho = rho
+  []
+  [v_friction]
+    type = PINSFVMomentumFriction
+    variable = superficial_vel_y
+    Darcy_name = linear_friction_coeff
+    momentum_component = 'y'
+    standard_friction_formulation = false
+    rho = rho
   []
 []
 
@@ -105,7 +123,7 @@ gamma = 1.4
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [fluid_props_to_mat_props]
     type = GeneralFunctorFluidProps
     fp = air
@@ -113,6 +131,7 @@ gamma = 1.4
     T_fluid = T_fluid
     speed = speed
     force_define_density = true
+    neglect_derivatives_of_density_time_derivative = false
     mu_rampdown = 'mu_rampdown_fn'
     characteristic_length = 1
     porosity = porosity
@@ -120,14 +139,21 @@ gamma = 1.4
 
   [scalar_props]
     type = ADGenericFunctorMaterial
-    prop_names = 'porosity'
-    prop_values = '1      '
+    prop_names = 'porosity loss_coeff'
+    prop_values = '1       1.3'
   []
 
-  [vector_props]
+  [linear_friction]
+    type = ADParsedFunctorMaterial
+    property_name = 'linear_friction'
+    expression = 'loss_coeff * rho'
+    functor_names = 'loss_coeff rho'
+  []
+
+  [linear_friction_coeff]
     type = ADGenericVectorFunctorMaterial
-    prop_names = 'Darcy_coef'
-    prop_values = '1.3 1.3 1.3'
+    prop_names = 'linear_friction_coeff'
+    prop_values = 'linear_friction linear_friction linear_friction'
   []
 []
 
@@ -147,13 +173,13 @@ gamma = 1.4
 
 [AuxKernels]
   [rho_var_aux]
-    type = ADFunctorElementalAux
+    type = FunctorAux
     variable = rho_var
     functor = rho
   []
 
   [cp_var_aux]
-    type = ADFunctorElementalAux
+    type = FunctorAux
     variable = cp_var
     functor = cp
   []

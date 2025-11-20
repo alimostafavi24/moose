@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -10,6 +10,7 @@
 // MOOSE includes
 #include "Control.h"
 #include "InputParameterWarehouse.h"
+#include "FEProblemBase.h"
 
 InputParameters
 Control::validParams()
@@ -27,6 +28,7 @@ Control::validParams()
 
   params.addParam<std::vector<std::string>>(
       "depends_on",
+      {},
       "The Controls that this control relies upon (i.e. must execute before this one)");
 
   return params;
@@ -34,6 +36,7 @@ Control::validParams()
 
 Control::Control(const InputParameters & parameters)
   : MooseObject(parameters),
+    PerfGraphInterface(this),
     TransientInterface(this),
     SetupInterface(this),
     FunctionInterface(this),
@@ -41,10 +44,15 @@ Control::Control(const InputParameters & parameters)
     Restartable(this, "Controls"),
     PostprocessorInterface(this),
     VectorPostprocessorInterface(this),
+    ReporterInterface(this),
     _fe_problem(*getCheckedPointerParam<FEProblemBase *>("_fe_problem_base")),
     _depends_on(getParam<std::vector<std::string>>("depends_on")),
     _input_parameter_warehouse(_app.getInputParameterWarehouse())
 {
+  if (getExecuteOnEnum().contains(EXEC_TIMESTEP_END) && _app.testReStep())
+    paramInfo("execute_on",
+              "Controls executed on timestep_end often have undefined behavior when repeating "
+              "timesteps.");
 }
 
 MultiMooseEnum
@@ -56,6 +64,13 @@ Control::getExecuteOptions()
   ExecFlagEnum execute_on = MooseUtils::getDefaultExecFlagEnum();
   execute_on = {EXEC_INITIAL, EXEC_TIMESTEP_END};
   return execute_on;
+}
+
+bool
+Control::hasControllableParameterByName(const std::string & name) const
+{
+  MooseObjectParameterName param_name(name);
+  return !_input_parameter_warehouse.getControllableParameter(param_name).empty();
 }
 
 ControllableParameter

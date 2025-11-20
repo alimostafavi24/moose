@@ -27,19 +27,19 @@ mu=0
 
     inlet_boundaries = 'left'
     momentum_inlet_types = 'fixed-velocity'
-    momentum_inlet_function = '1 0'
+    momentum_inlet_functors = '1 0'
     wall_boundaries = 'top bottom'
     momentum_wall_types = 'slip slip'
     outlet_boundaries = 'right'
     momentum_outlet_types = 'fixed-pressure'
-    pressure_function = '0.4'
+    pressure_functors = '0.4'
     porosity_interface_pressure_treatment = 'bernoulli'
     mass_advection_interpolation = 'upwind'
     momentum_advection_interpolation = 'upwind'
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [const]
     type = ADGenericFunctorMaterial
     prop_names = 'rho mu'

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -15,6 +15,8 @@ InputParameters
 ADHydraulicDiameterCircularMaterial::validParams()
 {
   InputParameters params = Material::validParams();
+  params.addClassDescription(
+      "Defines a circular-equivalent hydraulic diameter from the local area");
   params.addRequiredParam<MaterialPropertyName>("D_h_name",
                                                 "Hydraulic diameter material property name");
   params.addRequiredCoupledVar("A", "Cross-sectional area");
@@ -32,5 +34,6 @@ ADHydraulicDiameterCircularMaterial::ADHydraulicDiameterCircularMaterial(
 void
 ADHydraulicDiameterCircularMaterial::computeQpProperties()
 {
-  _D_h[_qp] = std::sqrt(4. * _area[_qp] / libMesh::pi);
+  using std::sqrt;
+  _D_h[_qp] = sqrt(4. * _area[_qp] / libMesh::pi);
 }

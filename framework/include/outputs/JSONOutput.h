@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -19,7 +19,8 @@ public:
   JSONOutput(const InputParameters & parameters);
 
 protected:
-  virtual void output(const ExecFlagType & type) override;
+  virtual void initialSetup() override;
+  virtual void output() override;
   virtual void outputReporters() override;
   virtual void outputSystemInformation() override;
   virtual void timestepSetup() override;
@@ -29,6 +30,9 @@ protected:
 private:
   /// Flag to create a file for each time step
   const bool _one_file_per_timestep;
+
+  /// The names of the specific reporters to output (if any)
+  const std::vector<ReporterName> * const _reporters;
 
   /// The root JSON node for output
   nlohmann::json & _json;

@@ -121,14 +121,14 @@ rho=1
     type = INSFVInletVelocityBC
     variable = vel_x
     boundary = 'inlet outlet'
-    function = vel_x_exact
+    functor = vel_x_exact
   []
 
   [inlet_y]
     type = INSFVInletVelocityBC
     variable = vel_y
     boundary = 'inlet outlet'
-    function = vel_y_exact
+    functor = vel_y_exact
   []
 []
 
@@ -157,7 +157,7 @@ rho=1
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [mu]
     type = ADGenericFunctorMaterial
     prop_names = 'mu'

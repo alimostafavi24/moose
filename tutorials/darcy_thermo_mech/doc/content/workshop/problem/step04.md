@@ -2,7 +2,7 @@
 
 !---
 
-The velocity is the primary variable of interest, it is computed base on the pressure as:
+The velocity is the primary variable of interest, it is computed based on the pressure as:
 
 !equation
 \vec{u} = -\frac{\mathbf{K}}{\mu} \nabla p
@@ -42,14 +42,14 @@ occurs in the element interiors.
 
 ## Step 4: Input File
 
-!listing step04_velocity_aux/problems/step4.i
+!listing step04_velocity_aux/problems/step4.i diff=step03_darcy_material/problems/step3.i
 
 !---
 
 ## Step 4: Run
 
 ```bash
-cd ~/projects/moose/tutorials/darcy-thermo_mech/step04_velocity_aux
+cd ~/projects/moose/tutorials/darcy_thermo_mech/step04_velocity_aux
 make -j 12 # use number of processors for your system
 cd problems
 ../darcy_thermo_mech-opt -i step4.i
@@ -60,16 +60,18 @@ cd problems
 ## Step 4: Result
 
 !media darcy_thermo_mech/step04_result.png
+       alt=The pressure and velocity fields obtained by running the simulation above.
 
 !---
 
 ## Tighter Solve Tolerance
 
 ```bash
-cd ~/projects/moose/tutorials/darcy-thermo_mech/step04_velocity_aux
+cd ~/projects/moose/tutorials/darcy_thermo_mech/step04_velocity_aux
 make -j 12 # use number of processors for your system
 cd problems
 ../darcy_thermo_mech-opt -i step4.i Executioner/nl_rel_tol=1e-12
 ```
 
 !media darcy_thermo_mech/step04_result_tight.png
+       alt=The pressure and velocity fields obtained by running the simulation with smaller tolerances.

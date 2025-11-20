@@ -11,10 +11,23 @@ MOOSE_JOBS        ?= 8
 # Include variables defined by MOOSE configure if it's been run
 -include $(MOOSE_DIR)/conf_vars.mk
 
-# If the user has no environment variable
-# called METHOD, they get optimized mode.
-ifeq (x$(METHOD),x)
-  METHOD := opt
+# PREFIX should be set in conf_vars. If however the user didn't run configure we
+# won't have a prefix. We'll use the automake default then:
+PREFIX ?= '/usr/local'
+
+ifneq ($(filter compile_commands.json,$(MAKECMDGOALS)),)
+# If compile_commands.json is a goal, make sure it is the only goal
+ifneq ($(words $(MAKECMDGOALS)),1)
+$(error compile_commands.json must be the only goal when it is specified)
+endif
+GENERATING_COMPILE_COMMANDS := true
+endif
+
+# Default method to dbg if generating compile_commands.json, opt otherwise
+ifeq ($(GENERATING_COMPILE_COMMANDS),true)
+METHOD ?= dbg
+else
+METHOD ?= opt
 endif
 
 # libmesh-config is in different places depending on whether you are using
@@ -40,6 +53,11 @@ libmesh_LIBS     := $(shell METHOD=$(METHOD) $(libmesh_config) --libs)
 libmesh_HOST     := $(shell METHOD=$(METHOD) $(libmesh_config) --host)
 libmesh_LDFLAGS  := $(shell METHOD=$(METHOD) $(libmesh_config) --ldflags)
 
+# In the event that we're using something like mpicxx, query it for
+# the underlying compiler (like mpicxx -show); otherwise, fallback to
+# whatever libmesh_CXX is
+libmesh_UNDERLYING_CXX := $(shell ($(libmesh_CXX) -show 2>/dev/null || echo "$(libmesh_CXX)") | awk '{print $$1}')
+
 # You can completely disable timing by setting MOOSE_NO_PERF_GRAPH in your environment
 ifneq (x$(MOOSE_NO_PERF_GRAPH), x)
   libmesh_CXXFLAGS += -DMOOSE_NO_PERF_GRAPH
@@ -52,6 +70,12 @@ else
     libmesh_CXXFLAGS += -DHAVE_GPERFTOOLS -I$(GPERF_DIR)/include
     libmesh_LDFLAGS := -L$(GPERF_DIR)/lib -Wl,-rpath,$(GPERF_DIR)/lib -ltcmalloc_and_profiler $(libmesh_LDFLAGS)
 endif
+endif
+
+# Give us that sweet std::filesystem (not needed on mac)
+# Hopefully this can go in libMesh one day
+ifneq ($(shell uname -s),Darwin)
+	libmesh_LDFLAGS += -lstdc++fs
 endif
 
 # Google Test relies on static construction of objects in test
@@ -106,32 +130,30 @@ endif
 
 all:
 
-# Add all header symlinks as dependencies to this target
-header_symlinks:
-
 unity_files:
 
+.SECONDEXPANSION:
 
 #
 # C++ rules
 #
-pcre%.$(obj-suffix) : pcre%.cc
+pcre%.$(obj-suffix) : pcre%.cc | $$(prebuild)
 	@echo "Compiling C++ (in "$(METHOD)" mode) "$<"..."
 	@$(libmesh_LIBTOOL) --tag=CXX $(LIBTOOLFLAGS) --mode=compile --quiet \
           $(libmesh_CXX) $(libmesh_CPPFLAGS) $(CXXFLAGS) $(libmesh_CXXFLAGS) $(ADDITIONAL_CPPFLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) -w -DHAVE_CONFIG_H -MMD -MP -MF $@.d -MT $@ -c $< -o $@
 
-gtest%.$(no-method-obj-suffix) : gtest%.cc
+gtest%.$(no-method-obj-suffix) : gtest%.cc | $$(prebuild)
 	@echo "Compiling C++ "$<"..."
 	@$(libmesh_LIBTOOL) --tag=CXX $(LIBTOOLFLAGS) --mode=compile --quiet \
-          $(libmesh_CXX) $(ADDITIONAL_CPPFLAGS) $(CXXFLAGS) -w -MMD -MP -MF $@.d -MT $@ -c $< -o $@
+          $(libmesh_CXX) $(ADDITIONAL_CPPFLAGS) $(gtest_INCLUDE) $(CXXFLAGS) -w -MMD -MP -MF $@.d -MT $@ -c $< -o $@
 
-%.$(obj-suffix) : %.cc
+%.$(obj-suffix) : %.cc | $$(prebuild)
 	@echo "Compiling C++ (in "$(METHOD)" mode) "$<"..."
 	@$(libmesh_LIBTOOL) --tag=CXX $(LIBTOOLFLAGS) --mode=compile --quiet \
           $(libmesh_CXX) $(libmesh_CPPFLAGS) $(CXXFLAGS) $(libmesh_CXXFLAGS) $(ADDITIONAL_CPPFLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) -DHAVE_CONFIG_H -MMD -MP -MF $@.d -MT $@ -c $< -o $@
 
 define CXX_RULE_TEMPLATE
-%$(1).$(obj-suffix) : %.C $(ADDITIONAL_SRC_DEPS)
+%$(1).$(obj-suffix) : %.C $(ADDITIONAL_SRC_DEPS) | $$(prebuild)
 ifeq ($(1),)
 	@echo "Compiling C++ (in "$$(METHOD)" mode) "$$<"..."
 else
@@ -143,7 +165,7 @@ endef
 # Instantiate Rules
 $(eval $(call CXX_RULE_TEMPLATE,))
 
-%.$(obj-suffix) : %.cpp
+%.$(obj-suffix) : %.cpp | $$(prebuild)
 	@echo "Compiling C++ (in "$(METHOD)" mode) "$<"..."
 	@$(libmesh_LIBTOOL) --tag=CXX $(LIBTOOLFLAGS) --mode=compile --quiet \
 	  $(libmesh_CXX) $(libmesh_CPPFLAGS) $(CXXFLAGS) $(libmesh_CXXFLAGS) $(ADDITIONAL_CPPFLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) -MMD -MP -MF $@.d -MT $@ -c $< -o $@
@@ -164,12 +186,12 @@ $(eval $(call CXX_RULE_TEMPLATE,))
 # C rules
 #
 
-pcre%.$(obj-suffix) : pcre%.c
+pcre%.$(obj-suffix) : pcre%.c | $$(prebuild)
 	@echo "Compiling C (in "$(METHOD)" mode) "$<"..."
 	@$(libmesh_LIBTOOL) --tag=CC $(LIBTOOLFLAGS) --mode=compile --quiet \
           $(libmesh_CC) $(libmesh_CPPFLAGS) $(ADDITIONAL_CPPFLAGS) $(libmesh_CFLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) -w -DHAVE_CONFIG_H -MMD -MP -MF $@.d -MT $@ -c $< -o $@
 
-%.$(obj-suffix) : %.c
+%.$(obj-suffix) : %.c | $$(prebuild)
 	@echo "Compiling C (in "$(METHOD)" mode) "$<"..."
 	@$(libmesh_LIBTOOL) --tag=CC $(LIBTOOLFLAGS) --mode=compile --quiet \
 	  $(libmesh_CC) $(libmesh_CPPFLAGS) $(ADDITIONAL_CPPFLAGS) $(libmesh_CFLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) -MMD -MP -MF $@.d -MT $@ -c $< -o $@
@@ -181,7 +203,7 @@ pcre%.$(obj-suffix) : pcre%.c
 #
 
 %.$(obj-suffix) : %.f
-	@echo "Compiling Fortan (in "$(METHOD)" mode) "$<"..."
+	@echo "Compiling Fortran (in "$(METHOD)" mode) "$<"..."
 	@$(libmesh_LIBTOOL) --tag=F77 $(LIBTOOLFLAGS) --mode=compile --quiet \
 	  $(libmesh_F77) $(libmesh_FFLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) -c $< -o $@
 
@@ -201,6 +223,14 @@ PreProcessed_FFLAGS := $(libmesh_FFLAGS)
 #
 
 mpif90_command := $(libmesh_F90)
+
+#
+# Kokkos rules
+#
+
+ifeq ($(ENABLE_KOKKOS),true)
+  include $(MOOSE_DIR)/framework/kokkos.mk
+endif
 
 # If $(libmesh_f90) is an mpiXXX compiler script, use -show
 # to determine the base compiler
@@ -224,7 +254,7 @@ endif
 %.$(obj-suffix) : %.f90
 	@echo "Compiling Fortran90 (in "$(METHOD)" mode) "$<"..."
 	@$(libmesh_LIBTOOL) --tag=FC $(LIBTOOLFLAGS) --mode=compile --quiet \
-	  $(libmesh_F90) $(libmesh_FFLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) -c $< $(module_dir_flag) -o $@
+	  $(libmesh_F90) -ffree-line-length-none $(libmesh_FFLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) -c $< $(module_dir_flag) -o $@
 
 # Add method to list of defines passed to the compiler
 libmesh_CXXFLAGS += -DMETHOD=$(METHOD)
@@ -308,18 +338,18 @@ endif
 # out to be more trouble than it was worth to get working.
 #
 PLUGIN_FLAGS := -shared -fPIC -Wl,-undefined,dynamic_lookup
-%-$(METHOD).plugin : %.C
-	# we add include/base so that MooseConfig.h can be found, which is absent from the symlink dirs
-	@$(libmesh_CXX) $(libmesh_CPPFLAGS) $(ADDITIONAL_CPPFLAGS) $(CXXFLAGS) $(libmesh_CXXFLAGS) $(PLUGIN_FLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) -I $(FRAMEWORK_DIR)/include/base $< -o $@
-%-$(METHOD).plugin : %.c
+
+%-$(METHOD).plugin : %.C | $$(prebuild)
+	@$(libmesh_CXX) $(libmesh_CPPFLAGS) $(ADDITIONAL_CPPFLAGS) $(CXXFLAGS) $(libmesh_CXXFLAGS) $(PLUGIN_FLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) $< -o $@
+%-$(METHOD).plugin : %.c | $$(prebuild)
 	@echo "Compiling C Plugin (in "$(METHOD)" mode) "$<"..."
 	@$(libmesh_CC) $(libmesh_CPPFLAGS) $(ADDITIONAL_CPPFLAGS) $(libmesh_CFLAGS) $(PLUGIN_FLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) $< -o $@
 %-$(METHOD).plugin : %.f
-	@echo "Compiling Fortan Plugin (in "$(METHOD)" mode) "$<"..."
+	@echo "Compiling Fortran Plugin (in "$(METHOD)" mode) "$<"..."
 	@$(libmesh_F77) $(libmesh_FFLAGS) $(PLUGIN_FLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) $< -o $@
 %-$(METHOD).plugin : %.f90
-	@echo "Compiling Fortan Plugin (in "$(METHOD)" mode) "$<"..."
-	@$(libmesh_F90) $(libmesh_FFLAGS) $(PLUGIN_FLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) $< -o $@
+	@echo "Compiling Fortran Plugin (in "$(METHOD)" mode) "$<"..."
+	@$(libmesh_F90) -ffree-line-length-none $(libmesh_FFLAGS) $(PLUGIN_FLAGS) $(app_INCLUDES) $(libmesh_INCLUDE) $< -o $@
 
 # Define the "test" target, we'll use a variable name so that we can override it without warnings if needed
 TEST ?= test

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -167,9 +167,10 @@ EquilibriumConstantInterpolator::sampleDerivative(Real T)
   }
 }
 
-DualReal
-EquilibriumConstantInterpolator::sample(DualReal T)
+ADReal
+EquilibriumConstantInterpolator::sample(const ADReal & T)
 {
+  using std::log;
   switch (_fit_type)
   {
     case FitTypeEnum::FOURTHORDER:
@@ -177,7 +178,7 @@ EquilibriumConstantInterpolator::sample(DualReal T)
              _coeffs[3] * Utility::pow<3>(T) + _coeffs[4] * Utility::pow<4>(T);
 
     case FitTypeEnum::MAIERKELLY:
-      return _coeffs[0] * std::log(T) + _coeffs[1] + _coeffs[2] * T + _coeffs[3] / T +
+      return _coeffs[0] * log(T) + _coeffs[1] + _coeffs[2] * T + _coeffs[3] / T +
              _coeffs[4] / Utility::pow<2>(T);
 
     case FitTypeEnum::LINEAR:

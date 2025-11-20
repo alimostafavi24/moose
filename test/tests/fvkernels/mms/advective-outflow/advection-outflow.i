@@ -93,12 +93,21 @@ a=1.1
 []
 
 [Executioner]
-  type = Steady
+  type = Transient
+  dt = 1
+  end_time = 10
+  nl_abs_tol = 1e-14
+  steady_state_tolerance = 1e-10
   solve_type = 'NEWTON'
+  petsc_options_iname = '-pc_type -pc_factor_shift_type -pc_factor_mat_solver_type'
+  petsc_options_value = 'lu       NONZERO               mumps'
 []
 
 [Outputs]
-  exodus = true
+  [out]
+    type = Exodus
+    execute_on = 'final'
+  []
   csv = true
 []
 

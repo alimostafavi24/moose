@@ -83,14 +83,18 @@
   [from_sub]
     source_variable = sub_u
     variable = transferred_u
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     from_multi_app = sub
     execute_on = 'initial timestep_end'
+    # Test features non-overlapping meshes
+    error_on_miss = false
   []
   [elemental_from_sub]
     source_variable = sub_u
     variable = elemental_transferred_u
-    type = MultiAppShapeEvaluationTransfer
+    type = MultiAppGeneralFieldShapeEvaluationTransfer
     from_multi_app = sub
+    # Test features non-overlapping meshes
+    error_on_miss = false
   []
 []

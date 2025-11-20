@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -10,12 +10,12 @@
 #pragma once
 
 // MOOSE includes
-#include "OversampleOutput.h"
+#include "SampledOutput.h"
 
 /**
  * Class for output data to the TecplotII format
  */
-class Tecplot : public OversampleOutput
+class Tecplot : public SampledOutput
 {
 public:
   static InputParameters validParams();
@@ -25,12 +25,14 @@ public:
    */
   Tecplot(const InputParameters & parameters);
 
+  bool supportsMaterialPropertyOutput() const override { return true; }
+
 protected:
   /**
    * Overload the Output::output method, this is required for Tecplot
    * output due to the method utilized for outputting single/global parameters
    */
-  virtual void output(const ExecFlagType & type) override;
+  virtual void output() override;
 
   /**
    * Returns the current filename, this method handles adding the timestep suffix

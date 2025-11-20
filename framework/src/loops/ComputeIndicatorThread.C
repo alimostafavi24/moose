@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -13,7 +13,7 @@
 #include "AuxiliarySystem.h"
 #include "FEProblem.h"
 #include "Indicator.h"
-#include "InternalSideIndicator.h"
+#include "InternalSideIndicatorBase.h"
 #include "MooseVariableFE.h"
 #include "Problem.h"
 #include "SwapBackSentinel.h"
@@ -69,12 +69,11 @@ ComputeIndicatorThread::subdomainChanged()
       _subdomain, needed_var_vector_tags, _tid);
   _fe_problem.setActiveFEVariableCoupleableVectorTags(needed_var_vector_tags, _tid);
 
-  std::set<unsigned int> needed_mat_props;
+  std::unordered_set<unsigned int> needed_mat_props;
   _indicator_whs.updateMatPropDependency(needed_mat_props, _tid);
   _internal_side_indicators.updateMatPropDependency(needed_mat_props, _tid);
-  _fe_problem.setActiveMaterialProperties(needed_mat_props, _tid);
 
-  _fe_problem.prepareMaterials(_subdomain, _tid);
+  _fe_problem.prepareMaterials(needed_mat_props, _subdomain, _tid);
 }
 
 void
@@ -117,7 +116,7 @@ ComputeIndicatorThread::onElement(const Elem * elem)
 
     if (_internal_side_indicators.hasActiveBlockObjects(_subdomain, _tid))
     {
-      const std::vector<std::shared_ptr<InternalSideIndicator>> & internal_indicators =
+      const std::vector<std::shared_ptr<InternalSideIndicatorBase>> & internal_indicators =
           _internal_side_indicators.getActiveBlockObjects(_subdomain, _tid);
       for (const auto & internal_indicator : internal_indicators)
         internal_indicator->finalize();
@@ -125,11 +124,8 @@ ComputeIndicatorThread::onElement(const Elem * elem)
   }
 
   if (!_finalize) // During finalize the Indicators should be setting values in the vectors manually
-  {
-    Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
     for (auto * var : _aux_sys._elem_vars[_tid])
       var->add(_aux_sys.solution());
-  }
 }
 
 void
@@ -166,7 +162,7 @@ ComputeIndicatorThread::onInternalSide(const Elem * elem, unsigned int side)
         _fe_problem, &FEProblemBase::swapBackMaterialsNeighbor, _tid);
     _fe_problem.reinitMaterialsNeighbor(neighbor->subdomain_id(), _tid);
 
-    const std::vector<std::shared_ptr<InternalSideIndicator>> & indicators =
+    const std::vector<std::shared_ptr<InternalSideIndicatorBase>> & indicators =
         _internal_side_indicators.getActiveBlockObjects(block_id, _tid);
     for (const auto & indicator : indicators)
       indicator->computeIndicator();
@@ -188,4 +184,42 @@ ComputeIndicatorThread::post()
 void
 ComputeIndicatorThread::join(const ComputeIndicatorThread & /*y*/)
 {
+}
+
+void
+ComputeIndicatorThread::printGeneralExecutionInformation() const
+{
+  if (!_fe_problem.shouldPrintExecution(_tid))
+    return;
+
+  const auto & console = _fe_problem.console();
+  const auto & execute_on = _fe_problem.getCurrentExecuteOnFlag();
+  if (!_finalize)
+    console << "[DBG] Executing indicators on elements then on internal sides on " << execute_on
+            << std::endl;
+  else
+    console << "[DBG] Finalizing indicator loop" << std::endl;
+}
+
+void
+ComputeIndicatorThread::printBlockExecutionInformation() const
+{
+  if (!_fe_problem.shouldPrintExecution(_tid) || _blocks_exec_printed.count(_subdomain))
+    return;
+
+  const auto & console = _fe_problem.console();
+  if (_indicator_whs.hasActiveBlockObjects(_subdomain, _tid))
+  {
+    const auto & indicators = _indicator_whs.getActiveBlockObjects(_subdomain, _tid);
+    console << "[DBG] Ordering of element indicators on block " << _subdomain << std::endl;
+    printExecutionOrdering<Indicator>(indicators, false);
+  }
+  if (_internal_side_indicators.hasActiveBlockObjects(_subdomain, _tid))
+  {
+    const auto & indicators = _internal_side_indicators.getActiveBlockObjects(_subdomain, _tid);
+    console << "[DBG] Ordering of element internal sides indicators on block " << _subdomain
+            << std::endl;
+    printExecutionOrdering<InternalSideIndicatorBase>(indicators, false);
+  }
+  _blocks_exec_printed.insert(_subdomain);
 }

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -24,12 +24,17 @@ class DiscreteLineSegmentInterface
 public:
   DiscreteLineSegmentInterface(const MooseObject * moose_object);
 
-  virtual Point getPosition() const { return _position; }
+  virtual Point getPosition() const { return getStartPoint(); }
+  Point getStartPoint() const { return _position; }
+  Point getEndPoint() const { return _end_point; }
   virtual RealVectorValue getDirection() const { return _dir; }
   virtual Real getRotation() const { return _rotation; }
 
   virtual Real getNumElems() const { return _n_elem; }
   virtual Real getLength() const { return _length; }
+
+  /// Gets the minimum element size
+  Real getMinimumElemSize() const { return _dx_min; }
 
   /*
    * Computes the axial coordinate for a given point in 3-D space.
@@ -51,6 +56,13 @@ public:
    * @param[in] p   Point in 3-D space
    */
   unsigned int getAxialSectionIndex(const Point & p) const;
+
+  /*
+   * Gets the axial element index for a given element center point in 3-D space.
+   *
+   * @param[in] p_center   Element center point in 3-D space
+   */
+  unsigned int getAxialElementIndex(const Point & p_center) const;
 
   /**
    * Computes point in 3-D space from a point in reference space.
@@ -94,6 +106,9 @@ protected:
   /// Total axial length
   Real _length;
 
+  /// End point of line segment
+  const Point _end_point;
+
   /// Number of elements in each axial section
   const std::vector<unsigned int> & _n_elems;
   /// Total number of axial elements
@@ -103,6 +118,9 @@ protected:
   const unsigned int _n_sections;
   /// Axial coordinate of the end of each axial section using the line 'position' as the origin
   std::vector<Real> _section_end;
+
+  /// Center axial coordinate of each axial element
+  std::vector<Real> _x_centers;
 
   /// Direction transformation tensor
   const RealTensorValue _R;
@@ -184,4 +202,7 @@ public:
                                                          const Real & rotation,
                                                          const std::vector<Real> & lengths,
                                                          const std::vector<unsigned int> & n_elems);
+
+  /// Minimum element size
+  Real _dx_min;
 };

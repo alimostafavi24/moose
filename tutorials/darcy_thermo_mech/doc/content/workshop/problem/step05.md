@@ -5,7 +5,7 @@
 With the pressure equation handled, the heat conduction equation is next.
 
 !equation
-C\left( \frac{\partial T}{\partial t} + \epsilon \vec{u}\cdot\nabla T \right) - \nabla\cdot k \nabla T = 0
+\rho c_p \left( \frac{\partial T}{\partial t} + \epsilon \vec{u}\cdot\nabla T \right) - \nabla\cdot k \nabla T = 0
 
 !---
 
@@ -15,23 +15,23 @@ Initially, only the steady heat conduction equation is considered:
 -\nabla \cdot k \nabla T = 0
 
 This is another diffusion-type term that depends on the thermal conductivity, $k$. This term is
-implemented in the MOOSE heat conduction module as `ADHeatConduction`.
+implemented in the MOOSE heat transfer module as `ADHeatConduction`.
 
 !---
 
 ## ADHeatConduction.h
 
-!listing heat_conduction/include/kernels/ADHeatConduction.h
+!listing heat_transfer/include/kernels/ADHeatConduction.h
 
 !---
 
 ## ADHeatConduction.C
 
-!listing heat_conduction/src/kernels/ADHeatConduction.C
+!listing heat_transfer/src/kernels/ADHeatConduction.C
 
 !---
 
-The ADHeatCondution Kernel in conjunction with a `GenericConstantMaterial` is all that is needed
+The ADHeatConduction Kernel in conjunction with a `GenericConstantMaterial` is all that is needed
 to perform a steady state heat conduction solve (with $T=350$ at the inlet and $T=300$ at the
 outlet).
 
@@ -43,9 +43,12 @@ GenericConstantMaterial is a simple way to define constant material properties.
 
 Two input parameters are provided using "list" syntax common to MOOSE:
 
-```text
-prop_names  = 'conductivity density'
-prop_values = '0.01         200'
+```moose
+[Materials/material]
+  type = GenericConstantMaterial
+  prop_names  = 'conductivity density'
+  prop_values = '0.01         200'
+[]
 ```
 
 !---
@@ -56,10 +59,10 @@ prop_values = '0.01         200'
 
 !---
 
-## Step 5b: Running Input File
+## Step 5a: Running Input File
 
 ```bash
-cd ~/projects/moose/tutorials/darcy-thermo_mech/step5_heat_conduction
+cd ~/projects/moose/tutorials/darcy_thermo_mech/step5_heat_conduction
 make -j 12 # use number of processors for your system
 cd problems
 ../darcy_thermo_mech-opt -i step5a_steady.i
@@ -74,9 +77,9 @@ cd problems
 To create a time-dependent problem add in the time derivative:
 
 !equation
-C \frac{\partial T}{\partial t} - \nabla \cdot k \nabla T = 0
+\rho c_p \frac{\partial T}{\partial t} - \nabla \cdot k \nabla T = 0
 
-The time term exists in the heat conduction module as `ADHeatConductionTimeDerivative`, thus
+The time term exists in the heat transfer module as `ADHeatConductionTimeDerivative`, thus
 only an update to the input file is required to run the transient case.
 
 !!end-steady
@@ -85,26 +88,26 @@ only an update to the input file is required to run the transient case.
 
 ## ADHeatConductionTimeDerivative.h
 
-!listing heat_conduction/include/kernels/ADHeatConductionTimeDerivative.h
+!listing heat_transfer/include/kernels/ADHeatConductionTimeDerivative.h
 
 !---
 
 ## ADHeatConductionTimeDerivative.C
 
-!listing heat_conduction/src/kernels/ADHeatConductionTimeDerivative.C
+!listing heat_transfer/src/kernels/ADHeatConductionTimeDerivative.C
 
 !---
 
 ## Step 5b: Time-dependent Input File
 
-!listing step05_heat_conduction/problems/step5b_transient.i
+!listing step05_heat_conduction/problems/step5b_transient.i diff=step05_heat_conduction/problems/step5a_steady.i
 
 !---
 
 ## Step 5b: Running Input File
 
 ```bash
-cd ~/projects/moose/tutorials/darcy-thermo_mech/step5_heat_conduction
+cd ~/projects/moose/tutorials/darcy_thermo_mech/step5_heat_conduction
 make -j 12 # use number of processors for your system
 cd problems
 ../darcy_thermo_mech-opt -i step5b_transient.i
@@ -141,14 +144,14 @@ rather than being replaced with a known flux, as is done in a `NeumannBC`.
 
 ## Step5c: Outflow Input File
 
-!listing step05_heat_conduction/problems/step5c_outflow.i
+!listing step05_heat_conduction/problems/step5c_outflow.i diff=step05_heat_conduction/problems/step5b_transient.i
 
 !---
 
 ## Step 5c: Run
 
 ```bash
-cd ~/projects/moose/tutorials/darcy-thermo_mech/step05_heat_conduction
+cd ~/projects/moose/tutorials/darcy_thermo_mech/step05_heat_conduction
 make -j 12 # use number of processors for your system
 cd problems
 ../darcy_thermo_mech-opt -i step5b_transient.i
@@ -159,3 +162,4 @@ cd problems
 ## Step 5c: Results
 
 !media darcy_thermo_mech/step05c_result.webm
+       alt=Time evolution of the temperature, obtained by running the simulation above.

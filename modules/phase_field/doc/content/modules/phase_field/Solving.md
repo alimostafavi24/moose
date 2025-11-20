@@ -11,7 +11,7 @@ Three solve methods are available in MOOSE, which are set in the [Executioner](E
 block using the +solve_type+ parameter, where the three possible options are:
 
 - `NEWTON` - Direct solution of the system of equations using Newton's method.
-  The full and accurate Jacobian is required. Thus, the [Preconditioner](Preconditioning/index.md)
+  The full and accurate Jacobian is required. Thus, the [Preconditioning](Preconditioning/index.md)
   block must be employed for systems with multiple nonlinear variables.
 - `JFNK` - The system is solved using Jacobian Free Newton Krylov (JFNK), so no
   Jacobian terms are needed. However, JFNK often does not perform well without
@@ -54,7 +54,7 @@ and is the only method that works well with the split Cahn-Hilliard equations. I
 
 The incomplete factorization method (ILU) allows specifying a fill factor using `-pc_factor_levels`
 increasing this can improve the preconditioner. This is the default preconditioner and works well for
-elliptic problems such as the pahse field equations.
+elliptic problems such as the phase field equations.
 
 ### BoomerAMG
 

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -22,6 +22,8 @@
 #include "libmesh/system.h"
 #include "libmesh/fe_type.h"
 #include "libmesh/string_to_enum.h"
+
+using namespace libMesh;
 
 // Users should never actually create this object
 registerMooseObject("MooseApp", MooseVariableBase);
@@ -65,13 +67,33 @@ MooseVariableBase::validParams()
                         false,
                         "True to make this variable a array variable regardless of number of "
                         "components. If 'components' > 1, this will automatically be set to true.");
-  params.addParam<NonlinearSystemName>("nl_sys",
-                                       "nl0",
-                                       "If this variable is a nonlinear variable, this is the "
-                                       "nonlinear system to which it should be added.");
+
+  params.addParam<std::vector<std::string>>(
+      "array_var_component_names",
+      "Only for use with array variables, allows setting custom names for each array variable "
+      "component. If this not set, the default name for each array variable componenet is "
+      "`base_name`+'_'+component number. If used, a name must be provided for each component and "
+      "the values are used to name the components as `base_name`+'_'+ "
+      "`array_var_component_names[component]`.");
+
+  params.addParam<SolverSystemName>("solver_sys",
+                                    "nl0",
+                                    "If this variable is a solver variable, this is the "
+                                    "solver system to which it should be added.");
+  params.addParam<bool>(
+      "disable_p_refinement",
+      "True to disable p-refinement for this variable. Note that because this happens on the "
+      "family basis, users need to have this flag consistently set for all variables in the same "
+      "family. Currently MOOSE disables p-refinement for variables in the following families by "
+      "default: LAGRANGE NEDELEC_ONE RAVIART_THOMAS LAGRANGE_VEC CLOUGH BERNSTEIN and "
+      "RATIONAL_BERNSTEIN.");
+
   params.addParamNamesToGroup("scaling eigen", "Advanced");
 
   params.addParam<bool>("use_dual", false, "True to use dual basis for Lagrange multipliers");
+  params.transferParam<std::vector<Real>>(AddVariableAction::validParams(), "initial_condition");
+  params.transferParam<std::string>(AddVariableAction::validParams(), "initial_from_file_var");
+  params.addParamNamesToGroup("scaling eigen use_dual", "Advanced");
 
   params.registerBase("MooseVariableBase");
   params.addPrivateParam<SystemBase *>("_system_base");
@@ -99,38 +121,76 @@ MooseVariableBase::MooseVariableBase(const InputParameters & parameters)
     _subproblem(_sys.subproblem()),
     _variable(_sys.system().variable(_var_num)),
     _assembly(_subproblem.assembly(getParam<THREAD_ID>("_tid"),
-                                   _var_kind == Moose::VAR_NONLINEAR ? _sys.number() : 0)),
+                                   (_var_kind == Moose::VAR_SOLVER) ? _sys.number() : 0)),
     _dof_map(_sys.dofMap()),
     _mesh(_subproblem.mesh()),
     _tid(getParam<THREAD_ID>("tid")),
     _count(getParam<unsigned int>("components")),
-    _use_dual(getParam<bool>("use_dual")),
-    _is_array(getParam<bool>("array"))
+    _scaling_factor(_count, 1.0),
+    _use_dual(getParam<bool>("use_dual"))
 {
   scalingFactor(isParamValid("scaling") ? getParam<std::vector<Real>>("scaling")
                                         : std::vector<Real>(_count, 1.));
-
   if (getParam<bool>("fv") && getParam<bool>("eigen"))
     paramError("eigen", "finite volume (fv=true) variables do not have eigen support");
   if (getParam<bool>("fv") && _fe_type.family != MONOMIAL)
     paramError("family", "finite volume (fv=true) variables must be have MONOMIAL family");
   if (getParam<bool>("fv") && _fe_type.order != 0)
     paramError("order", "finite volume (fv=true) variables currently support CONST order only");
-  if (_count > 1)
-    mooseAssert(_is_array, "Must be true with component > 1");
-  if (_is_array)
+
+  if (isParamValid("array_var_component_names"))
   {
     auto name0 = _sys.system().variable(_var_num).name();
     std::size_t found = name0.find_last_of("_");
     if (found == std::string::npos)
       mooseError("Error creating ArrayMooseVariable name with base name ", name0);
-    _var_name = name0.substr(0, found);
+    const auto name_base = name0.substr(0, found);
+    const auto & name_endings = getParam<std::vector<std::string>>("array_var_component_names");
+    for (const auto & name : name_endings)
+      _array_var_component_names.push_back(name_base + '_' + name);
   }
+  else if (_count != 1)
+    mooseError("Component size of normal variable (_count) must be one; equals " +
+               std::to_string(_count) + "");
+
+  // check parameters set automatically by SystemBase related to array variables
+  mooseAssert(
+      isArray() ? _count == _array_var_component_names.size() : true,
+      "An inconsistent numer of names or no names were provided for array variable components");
+  if (_count > 1)
+    mooseAssert(isArray(), "Must be true with component > 1");
+
+  if (!blockRestricted())
+    _is_lower_d = false;
   else
   {
-    mooseAssert(_count == 1, "component size of normal variable (_count) must be one");
-    _var_name = _sys.system().variable(_var_num).name();
+    const auto & blk_ids = blockIDs();
+    if (blk_ids.empty())
+      paramError("block",
+                 "Every variable should have at least one subdomain. For '" + name() +
+                     "' no subdomain is defined.");
+
+    _is_lower_d = _mesh.isLowerD(*blk_ids.begin());
+#ifdef DEBUG
+    for (auto it = ++blk_ids.begin(); it != blk_ids.end(); ++it)
+      if (_is_lower_d != _mesh.isLowerD(*it))
+        mooseError("A user should not specify a mix of lower-dimensional and higher-dimensional "
+                   "blocks for variable '" +
+                   name() + "'. This variable is " + (_is_lower_d ? "" : "not ") +
+                   "recognised as lower-dimensional, but is also defined for the " +
+                   (_is_lower_d ? "higher" : "lower") + "-dimensional block '" +
+                   _mesh.getSubdomainName(*it) + "' (block-id " + std::to_string(*it) + ").");
+#endif
   }
+}
+
+const std::string &
+MooseVariableBase::arrayVariableComponent(const unsigned int i) const
+{
+  mooseAssert(
+      i < _array_var_component_names.size(),
+      "Requested array variable component number is greater than the number of component names.");
+  return _array_var_component_names[i];
 }
 
 const std::vector<dof_id_type> &
@@ -155,46 +215,44 @@ std::vector<dof_id_type>
 MooseVariableBase::componentDofIndices(const std::vector<dof_id_type> & dof_indices,
                                        unsigned int component) const
 {
-  std::vector<dof_id_type> new_dof_indices(dof_indices);
-  if (component != 0)
-  {
-    if (isNodal())
-      for (auto & id : new_dof_indices)
-        id += component;
-    else
-    {
-      unsigned int n = dof_indices.size();
-      for (auto & id : new_dof_indices)
-        id += component * n;
-    }
-  }
+  mooseAssert(dof_indices.size() % this->count() == 0,
+              "The dof indices container must be a multiple of count");
+  std::vector<dof_id_type> new_dof_indices(dof_indices.size() / this->count());
+  for (const auto i : index_range(new_dof_indices))
+    new_dof_indices[i] = dof_indices[component * new_dof_indices.size() + i];
   return new_dof_indices;
-}
-
-void
-MooseVariableBase::scalingFactor(Real factor)
-{
-  _scaling_factor.assign(_count, factor);
 }
 
 void
 MooseVariableBase::scalingFactor(const std::vector<Real> & factor)
 {
-  _scaling_factor = factor;
+  mooseAssert(factor.size() == _count, "Inconsistent scaling factor size");
+  for (const auto i : make_range(_count))
+    _scaling_factor[i] = factor[i];
 }
 
 void
 MooseVariableBase::initialSetup()
 {
-#ifdef MOOSE_GLOBAL_AD_INDEXING
   // Currently the scaling vector is only used through AD residual computing objects
-  if (_subproblem.haveADObjects() &&
+  if ((_var_kind == Moose::VAR_SOLVER) && _subproblem.haveADObjects() &&
       (_subproblem.automaticScaling() || (std::find_if(_scaling_factor.begin(),
                                                        _scaling_factor.end(),
                                                        [](const Real element) {
                                                          return !MooseUtils::absoluteFuzzyEqual(
                                                              element, 1.);
                                                        }) != _scaling_factor.end())))
+
     _sys.addScalingVector();
-#endif
+}
+
+const NumericVector<Number> &
+MooseVariableBase::getSolution(const Moose::StateArg & state) const
+{
+  // It's not safe to use solutionState(0) because it returns the libMesh System solution member
+  // which is wrong during things like finite difference Jacobian evaluation, e.g. when PETSc
+  // perturbs the solution vector we feed these perturbations into the current_local_solution
+  // while the libMesh solution is frozen in the non-perturbed state
+  return (state.state == 0) ? *this->_sys.currentSolution()
+                            : this->_sys.solutionState(state.state, state.iteration_type);
 }

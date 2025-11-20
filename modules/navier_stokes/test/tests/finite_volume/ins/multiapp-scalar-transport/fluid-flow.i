@@ -54,13 +54,13 @@ rho=1
 
 [AuxKernels]
   [ax_out]
-    type = ADFunctorElementalAux
+    type = FunctorAux
     functor = ax
     variable = ax_out
     execute_on = timestep_end
   []
   [ay_out]
-    type = ADFunctorElementalAux
+    type = FunctorAux
     functor = ay
     variable = ay_out
     execute_on = timestep_end
@@ -119,13 +119,13 @@ rho=1
     type = INSFVInletVelocityBC
     boundary = 'left'
     variable = u
-    function = '1'
+    functor = '1'
   []
   [inlet-v]
     type = INSFVInletVelocityBC
     boundary = 'left'
     variable = v
-    function = 0
+    functor = 0
   []
   [walls-u]
     type = INSFVNoSlipWallBC

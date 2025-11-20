@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -31,6 +31,8 @@ MultiAppPostprocessorToAuxScalarTransfer::validParams()
       "from_postprocessor", "The name of the Postprocessor to transfer the value from.");
   params.addRequiredParam<VariableName>(
       "to_aux_scalar", "The name of the scalar AuxVariable to transfer the value to.");
+  MultiAppTransfer::addUserObjectExecutionCheckParam(params);
+
   return params;
 }
 
@@ -50,6 +52,20 @@ MultiAppPostprocessorToAuxScalarTransfer::execute()
   TIME_SECTION("MultiAppPostprocessorToAuxScalarTransfer::execute()",
                5,
                "Performing transfer between a scalar variable and a postprocessor");
+
+  // Execute the postprocessor if it was specified to execute on TRANSFER
+  switch (_current_direction)
+  {
+    case TO_MULTIAPP:
+    {
+      checkParentAppUserObjectExecuteOn(_from_pp_name);
+      _fe_problem.computeUserObjectByName(EXEC_TRANSFER, Moose::PRE_AUX, _from_pp_name);
+      _fe_problem.computeUserObjectByName(EXEC_TRANSFER, Moose::POST_AUX, _from_pp_name);
+      break;
+    }
+    case FROM_MULTIAPP:
+      errorIfObjectExecutesOnTransferInSourceApp(_from_pp_name);
+  }
 
   // Perform action based on the transfer direction
   switch (_current_direction)
@@ -150,4 +166,20 @@ MultiAppPostprocessorToAuxScalarTransfer::execute()
       break;
     }
   }
+}
+
+void
+MultiAppPostprocessorToAuxScalarTransfer::checkSiblingsTransferSupported() const
+{
+  // Check that we are in the supported configuration: same number of source and target apps
+  // The allocation of the child apps on the processors must be the same
+  if (getFromMultiApp()->numGlobalApps() == getToMultiApp()->numGlobalApps())
+  {
+    for (const auto i : make_range(getToMultiApp()->numGlobalApps()))
+      if (getFromMultiApp()->hasLocalApp(i) + getToMultiApp()->hasLocalApp(i) == 1)
+        mooseError("Child application allocation on parallel processes must be the same to support "
+                   "siblings postprocessor to scalar variable transfer");
+  }
+  else
+    mooseError("Number of source and target child apps must match for siblings transfer");
 }

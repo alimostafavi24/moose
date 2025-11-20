@@ -86,7 +86,7 @@ p_out = 1e6
   [dyno]
     type = ShaftConnectedMotor
     inertia = 10
-    torque = -450
+    torque = dyno_torque_fn
   []
   [shaft]
     type = Shaft
@@ -118,6 +118,10 @@ p_out = 1e6
     y = '5e-3 1e-2 5e-2 5e-1'
     x = '0 0.5 1 10'
   []
+  [dyno_torque_fn]
+    type = ConstantFunction
+    value = -450 # controlled
+  []
 []
 
 [ControlLogic]
@@ -142,9 +146,8 @@ p_out = 1e6
     initial_value = -450
   []
   [set_torque_value]
-    type = SetComponentRealValueControl
-    component = dyno
-    parameter = torque
+    type = SetRealValueControl
+    parameter = Functions/dyno_torque_fn/value
     value = pid_ctrl:output
   []
 []
@@ -156,18 +159,21 @@ p_out = 1e6
     execute_on = 'initial timestep_end'
   []
   [flow_coefficient]
-    type = ScalarVariable
-    variable = turbine:flow_coeff
+    type = ElementAverageValue
+    variable = flow_coeff
+    block = 'turbine'
     execute_on = 'initial timestep_end'
   []
   [delta_p]
-    type = ScalarVariable
-    variable = turbine:delta_p
+    type = ElementAverageValue
+    variable = delta_p
+    block = 'turbine'
     execute_on = 'initial timestep_end'
   []
   [power]
-    type = ScalarVariable
-    variable = turbine:power
+    type = ElementAverageValue
+    variable = power
+    block = 'turbine'
     execute_on = 'initial timestep_end'
   []
 []

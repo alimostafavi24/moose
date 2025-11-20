@@ -30,7 +30,7 @@ The following map is useful for understanding the template:
 The three rows correspond to standard, vector and array variables.
 OutputType is the data type used for templating.
 RealEigenVector is a typedef in [MooseTypes.h] as *Eigen::Matrix<Real, Eigen::Dynamic, 1>*.
-OutputShape is for the type of shape functions and OutputData is the type of basis function expansion coefficients that are stored in the moose array variable grabbed from the solution vector.
+OutputShape is for the type of shape functions and OutputData is the type of basis function expansion coefficients that are stored in the MOOSE array variable grabbed from the solution vector.
 
 ## Kernels for Array Variables
 
@@ -41,11 +41,11 @@ virtual void computeQpResidual(RealEigenVector & residual) = 0;
 virtual RealEigenVector computeQpJacobian();
 virtual RealEigenMatrix computeQpOffDiagJacobian(const MooseVariableFEBase & jvar);
 
-When defining a `computeQpResidual` in a derived class, this function +must+ define the residual in the input arguement (`residual`). This input is already properly sized when called in ArrayKernel.C. `computeQpJacobian` must return a vector defining the on-diagonal terms of the Jacobian. `computeQpOffDiagJacobian` must return a matrix with number of rows equal to the number of components and number of columns being the number of components in `jvar.`
+When defining a `computeQpResidual` in a derived class, this function +must+ define the residual in the input argument (`residual`). This input is already properly sized when called in ArrayKernel.C. `computeQpJacobian` must return a vector defining the on-diagonal terms of the Jacobian. `computeQpOffDiagJacobian` must return a matrix with number of rows equal to the number of components and number of columns being the number of components in `jvar.`
 
 Using [ArrayDiffusion.md] as an example. The `computeQpResidual` function has
 
-!listing ArrayDiffusion.C re=void\sArrayDiffusion::computeQpResidual.*?^}
+!listing /ArrayDiffusion.C re=void\sArrayDiffusion::computeQpResidual.*?^}
 
 where `_grad_u[_qp]` is an `Eigen::Matrix` with number of rows being equal to the number of components of the array variable and number of columns being `LIBMESH_DIM`. `_array_grad_test[_i][_qp]` is an `Eigen::Map` of classic `_grad_test[_i][_qp]` which is in type of `Gradient`. Thanks to the Eigen matrix arithmetic operators, we can have a simple multiplication expression here. `_d` is a pointer of a material property of `Real` type for scalar diffusion coefficient. Here we assume the diffusion coefficient is the same for all components. `_d_array` is a pointer to a `RealEigenVector` material
 property, here we assume there is a diffusion coefficient for each component with no
@@ -54,12 +54,12 @@ the diffusion coefficient is represented as dense matrix. See [ArrayDiffusion.md
 
 Correspondingly the `computeQpJacobian` has
 
-!listing ArrayDiffusion.C re=RealEigenVector\sArrayDiffusion::computeQpJacobian.*?^}
+!listing /ArrayDiffusion.C re=RealEigenVector\sArrayDiffusion::computeQpJacobian.*?^}
 
 It is noted that only the diagonal entries of the diffusion coefficients are used in the fully-coupled case because `computeQpJacobian` is supposed to only assemble the block-diagonal part of the Jacobian.
 The full local Jacobian is assembled in function `computeQpOffDiagJacobian`, where when the off-diagonal variable is the array variable, we have
 
-!listing ArrayDiffusion.C
+!listing /ArrayDiffusion.C
   re=RealEigenMatrix\sArrayDiffusion::computeQpOffDiagJacobian.*?^}
 
 The retuned value is in type of an Eigen matrix with number of rows and columns equal to the number of components.
@@ -73,7 +73,7 @@ virtual void initQpOffDiagJacobian(const MooseVariableFEBase & jvar);
 
 Which are functions that are called inside the quadrature point loop, but outside the test/shape function loop. This is useful to perform operations that depend on position (quadrature point) but do not depend on the test/shape function. For instance, [ArrayDiffusion.md] uses `initQpResidual` to check if the size of the vector or matrix diffusion coefficient matches the number of components in the variable:
 
-!listing ArrayDiffusion.C re=void\sArrayDiffusion::initQpResidual.*?^}
+!listing /ArrayDiffusion.C re=void\sArrayDiffusion::initQpResidual.*?^}
 
 Future work:
 
@@ -140,9 +140,9 @@ m_{n1} & m_{n2} & \dots & m_{nn}
 
 Eigen has some unique features that, when used properly, can significantly impact performance. Here are some recommendations that can improve code performance.
 
-- [Aliasing](http://eigen.tuxfamily.org/dox/group__TopicAliasing.html) is a technique in Eigen that contructs temporary objects when performing matrix multiplications, this is to avoid overriding data that needs to be used later in the computation. For instance `vec = mat * vec` will create a temporary vector for `mat * vec` then assign it to `vec` at the end. However, `vec2 = mat * vec1` does not need this temporary object and assign the result to `vec2` directly, this aliasing can be avoided by doing `vec2.noalias()`. The `noalias()` function should be used with extreme caution since it can cause erroneous results.
+- [Aliasing](http://eigen.tuxfamily.org/dox/group__TopicAliasing.html) is a technique in Eigen that constructs temporary objects when performing matrix multiplications, this is to avoid overriding data that needs to be used later in the computation. For instance `vec = mat * vec` will create a temporary vector for `mat * vec` then assign it to `vec` at the end. However, `vec2 = mat * vec1` does not need this temporary object and assign the result to `vec2` directly, this aliasing can be avoided by doing `vec2.noalias()`. The `noalias()` function should be used with extreme caution since it can cause erroneous results.
 
-- Eigen uses what's known as [expression templates](https://en.wikipedia.org/wiki/Expression_templates), enabling operations to be known at compile time. This allows multiple operations to occur in a single element element loop, providing more compiler optimization and improved cache efficiency. With this in mind, it is often better to write multiple Eigen operations in a single line or assignment. For instance, with the following syntax:
+- Eigen uses what's known as [expression templates](https://en.wikipedia.org/wiki/Expression_templates), enabling operations to be known at compile time. This allows multiple operations to occur in a single element loop, providing more compiler optimization and improved cache efficiency. With this in mind, it is often better to write multiple Eigen operations in a single line or assignment. For instance, with the following syntax:
 
   !listing! language=cpp
   a = 3*b + 4*c + 5*d

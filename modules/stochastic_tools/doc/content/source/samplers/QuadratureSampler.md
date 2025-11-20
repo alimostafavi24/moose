@@ -32,7 +32,7 @@ where $|\bm{i}| = \sum_{d=1}^D i_d$. See [!cite](gerstner1998numerical) for more
 
 ### Tensor Grid
 
-A tensor grid is created created by taking a Cartesian product of the points and a Kroenecker product of the weights from each dimensions' full order quadrature set. The resulting number of points is $N_q^D$, where $D$ is the number of dimensions. Currently, only Gauss quadrature types are used with tensor grid. [tensor-npts] shows the number of points several different $D$ and $N_q$. [tensor-grid] shows the points of a tensor grid of Gauss-Legendre quadrature with $D=2$ and $N_q=7$.
+A tensor grid is created by taking a Cartesian product of the points and a Kronecker product of the weights from each dimensions' full order quadrature set. The resulting number of points is $N_q^D$, where $D$ is the number of dimensions. Currently, only Gauss quadrature types are used with tensor grid. [tensor-npts] shows the number of points several different $D$ and $N_q$. [tensor-grid] shows the points of a tensor grid of Gauss-Legendre quadrature with $D=2$ and $N_q=7$.
 
 !table id=tensor-npts caption=Resulting number of grid points for tensor grid
 | $N_q$ | $D=2$ | $D=5$ | $D=8$ |
@@ -42,7 +42,9 @@ A tensor grid is created created by taking a Cartesian product of the points and
 | 5 | 25 | 3,125 | 390,625 |
 | 7 | 49 | 16,807 | 5,764,801 |
 
-!media tensor_grid.svg id=tensor-grid
+!media tensor_grid.svg
+       id=tensor-grid
+       alt=The layout of quadrature points in a tensor grid.
 
 ### Smolyak Sparse Grid
 
@@ -56,7 +58,9 @@ A Smolyak sparse grid is a multidimensional quadrature meant to integrate a comp
 | 5 | 55 | 1,001 | 4,845 |
 | 7 | 140 | 7,997 | 74,613 |
 
-!media smolyak_grid.svg id=smolyak-grid
+!media smolyak_grid.svg
+       id=smolyak-grid
+       alt=The layout of quadrature points in a Smolyak sparse grid.
 
 ### Clenshaw-Curtis Sparse Grid
 
@@ -70,7 +74,9 @@ A Clenshaw-Curtis (CC) grid is very similar to the Smolyak sparse, the only diff
 | 5 | 21 | 301 | 1,937 |
 | 7 | 49 | 1,113 | 11,937 |
 
-!media cc_grid.svg id=cc-grid
+!media cc_grid.svg
+       id=cc-grid
+       alt=The layout of quadrature points in a Clenshaw-Curtis sparse grid.
 
 ## Implementation
 

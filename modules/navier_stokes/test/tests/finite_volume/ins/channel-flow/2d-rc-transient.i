@@ -124,8 +124,8 @@ velocity_interp_method = 'rc'
   [energy_time]
     type = INSFVEnergyTimeDerivative
     variable = T_fluid
-    cp = ${cp}
     rho = ${rho}
+    dh_dt = dh_dt
   []
   [energy_advection]
     type = INSFVEnergyAdvection
@@ -153,13 +153,13 @@ velocity_interp_method = 'rc'
     type = INSFVInletVelocityBC
     boundary = 'left'
     variable = vel_x
-    function = '1'
+    functor = '1'
   []
   [inlet-v]
     type = INSFVInletVelocityBC
     boundary = 'left'
     variable = vel_y
-    function = 0
+    functor = 0
   []
   [inlet-T]
     type = FVNeumannBC
@@ -231,7 +231,7 @@ velocity_interp_method = 'rc'
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [constants]
     type = ADGenericFunctorMaterial
     prop_names = 'h_cv T_solid'
@@ -243,7 +243,7 @@ velocity_interp_method = 'rc'
     prop_values = '${cp}'
   []
   [ins_fv]
-    type = INSFVEnthalpyMaterial
+    type = INSFVEnthalpyFunctorMaterial
     rho = ${rho}
     temperature = 'T_fluid'
   []

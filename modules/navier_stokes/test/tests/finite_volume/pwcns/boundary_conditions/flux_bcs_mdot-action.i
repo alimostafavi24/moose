@@ -52,18 +52,22 @@ inlet_velocity = 0.001
     momentum_inlet_types = 'flux-mass'
     flux_inlet_pps = 'inlet_mdot'
     energy_inlet_types = 'flux-mass'
-    energy_inlet_function = 'inlet_T'
+    energy_inlet_functors = 'inlet_T'
 
     wall_boundaries = 'top bottom'
     momentum_wall_types = 'noslip noslip'
     energy_wall_types = 'heatflux heatflux'
-    energy_wall_function = '0 0'
+    energy_wall_functors = '0 0'
 
     outlet_boundaries = 'right'
     momentum_outlet_types = 'fixed-pressure'
-    pressure_function = '${outlet_pressure}'
+    pressure_functors = '${outlet_pressure}'
 
     external_heat_source = 'power_density'
+
+    mass_advection_interpolation = 'average'
+    momentum_advection_interpolation = 'average'
+    energy_advection_interpolation = 'average'
   []
 []
 
@@ -85,7 +89,7 @@ inlet_velocity = 0.001
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [const_functor]
     type = ADGenericFunctorMaterial
     prop_names = 'cp k mu porosity'

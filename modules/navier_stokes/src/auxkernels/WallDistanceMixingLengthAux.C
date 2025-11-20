@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -19,10 +19,11 @@ WallDistanceMixingLengthAux::validParams()
       "Computes the turbulent mixing length by assuming that it is "
       "proportional to the distance from the nearest wall. The mixing"
       "length is capped at a distance proportional to inputted parameter delta.");
-  params.addParam<std::vector<BoundaryName>>("walls", "Boundaries that correspond to solid walls");
-  params.addParam<Real>("von_karman_const", 0.41, "");   // Von Karman constant
-  params.addParam<Real>("von_karman_const_0", 0.09, ""); // Escudier' model parameter
-  params.addParam<Real>(
+  params.addRequiredParam<std::vector<BoundaryName>>("walls",
+                                                     "Boundaries that correspond to solid walls.");
+  params.addParam<MooseFunctorName>("von_karman_const", 0.41, "");   // Von Karman constant
+  params.addParam<MooseFunctorName>("von_karman_const_0", 0.09, ""); // Escudier' model parameter
+  params.addParam<MooseFunctorName>(
       "delta",
       1e9,
       ""); // Tunable parameter related to the thickness of the boundary layer.
@@ -33,20 +34,21 @@ WallDistanceMixingLengthAux::validParams()
 WallDistanceMixingLengthAux::WallDistanceMixingLengthAux(const InputParameters & parameters)
   : AuxKernel(parameters),
     _wall_boundary_names(getParam<std::vector<BoundaryName>>("walls")),
-    _von_karman_const(getParam<Real>("von_karman_const")),
-    _von_karman_const_0(getParam<Real>("von_karman_const_0")),
-    _delta(getParam<Real>("delta"))
+    _von_karman_const(getFunctor<Real>("von_karman_const")),
+    _von_karman_const_0(getFunctor<Real>("von_karman_const_0")),
+    _delta(getFunctor<Real>("delta"))
 {
   const MeshBase & mesh = _subproblem.mesh().getMesh();
   if (!mesh.is_replicated())
     mooseError("WallDistanceMixingLengthAux only supports replicated meshes");
-  if (!dynamic_cast<MooseVariableFV<Real> *>(&_var))
+  if (_var.feType() != FEType(CONSTANT, MONOMIAL))
     paramError("variable",
                "'",
                name(),
-               "' is currently programmed to use finite volume machinery, so make sure that '",
-               _var.name(),
-               "' is a finite volume variable.");
+               "' computes the distance from the closest wall to an approximation of the element "
+               "centroid; only a single dof is required to hold this value. Consequently users "
+               "should always use a constant monomial finite element type (this is what finite "
+               "volume variables implicitly use) for the auxiliary variables.");
 }
 
 Real
@@ -72,22 +74,9 @@ WallDistanceMixingLengthAux::computeValue()
     // Loop over all boundary elements and find the distance to the closest one
     for (dof_id_type elem_id : bnd_elems)
     {
-      const Elem & elem{l_mesh.elem_ref(elem_id)};
+      const Elem & elem = l_mesh.elem_ref(elem_id);
       const auto side = _mesh.sideWithBoundaryID(&elem, bid);
-      const FaceInfo * fi = _mesh.faceInfo(&elem, side);
-      // It's possible that we are on an internal boundary
-      if (!fi)
-      {
-        const Elem * const neigh = elem.neighbor_ptr(side);
-        mooseAssert(
-            neigh,
-            "In WallDistanceMixingLengthAux, we could not find a face information object with elem "
-            "and side, and we are on an external boundary. This shouldn't happen.");
-        const auto neigh_side = neigh->which_neighbor_am_i(&elem);
-        fi = _mesh.faceInfo(neigh, neigh_side);
-        mooseAssert(fi, "We should have a face info for either the elem or neigh side");
-      }
-      Point bnd_pos = fi->faceCentroid();
+      const auto bnd_pos = elem.side_ptr(side)->vertex_average();
       const auto distance = bnd_pos - _q_point[_qp];
       const auto dist2 = distance * distance;
       mooseAssert(dist2 != 0, "This distance should never be 0");
@@ -95,8 +84,15 @@ WallDistanceMixingLengthAux::computeValue()
     }
   }
 
-  if (std::sqrt(min_dist2) / _delta <= _von_karman_const_0 / _von_karman_const)
-    return _von_karman_const * std::sqrt(min_dist2);
+  const Moose::ElemArg elem_arg = {_current_elem, false};
+  const Moose::StateArg state_arg = Moose::currentState();
+
+  const auto delta = _delta(elem_arg, state_arg);
+  const auto von_karman_const = _von_karman_const(elem_arg, state_arg);
+  const auto von_karman_const_0 = _von_karman_const_0(elem_arg, state_arg);
+
+  if (std::sqrt(min_dist2) / delta <= von_karman_const_0 / von_karman_const)
+    return von_karman_const * std::sqrt(min_dist2);
   else
-    return _von_karman_const_0 * _delta;
+    return von_karman_const_0 * delta;
 }

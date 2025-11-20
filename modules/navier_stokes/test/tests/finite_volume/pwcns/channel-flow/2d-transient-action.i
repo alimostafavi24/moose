@@ -25,7 +25,7 @@ top_side_temperature = 150
 
 [Variables]
   [T_solid]
-    type = MooseVariableFVReal
+    type = INSFVEnergyVariable
     initial_condition = 100
   []
 []
@@ -63,21 +63,25 @@ top_side_temperature = 150
 
     inlet_boundaries = 'left'
     momentum_inlet_types = 'fixed-velocity'
-    momentum_inlet_function = '${u_inlet} 0'
+    momentum_inlet_functors = '${u_inlet} 0'
     energy_inlet_types = 'fixed-temperature'
-    energy_inlet_function = '${T_inlet}'
+    energy_inlet_functors = '${T_inlet}'
 
     wall_boundaries = 'top bottom'
     momentum_wall_types = 'noslip symmetry'
     energy_wall_types = 'heatflux heatflux'
-    energy_wall_function = '0 0'
+    energy_wall_functors = '0 0'
 
     outlet_boundaries = 'right'
     momentum_outlet_types = 'fixed-pressure'
-    pressure_function = '${p_outlet}'
+    pressure_functors = '${p_outlet}'
 
     ambient_convection_alpha = 'h_cv'
     ambient_temperature = 'T_solid'
+
+    mass_advection_interpolation = 'average'
+    momentum_advection_interpolation = 'average'
+    energy_advection_interpolation = 'average'
   []
 []
 
@@ -93,6 +97,7 @@ top_side_temperature = 150
   [solid_energy_diffusion]
     type = FVDiffusion
     variable = T_solid
+    # this should use eps * k instead of k
     coeff = ${k_s}
   []
   [solid_energy_convection]
@@ -114,7 +119,7 @@ top_side_temperature = 150
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [const_functor]
     type = ADGenericFunctorMaterial
     prop_names = 'h_cv'
@@ -149,8 +154,7 @@ top_side_temperature = 150
     type = ParsedAux
     variable = 'velocity_norm'
     coupled_variables = 'superficial_vel_x superficial_vel_y porosity'
-    expression = 'sqrt(superficial_vel_x*superficial_vel_x + superficial_vel_y*superficial_vel_y) / '
-               'porosity'
+    expression = 'sqrt(superficial_vel_x*superficial_vel_x + superficial_vel_y*superficial_vel_y) / porosity'
   []
 []
 

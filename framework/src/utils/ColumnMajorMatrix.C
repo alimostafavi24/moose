@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -9,8 +9,6 @@
 
 // MOOSE includes
 #include "ColumnMajorMatrix.h"
-
-#include "DualRealOps.h"
 
 #include "libmesh/petsc_macro.h"
 
@@ -165,8 +163,8 @@ ColumnMajorMatrixTempl<T>::eigen(ColumnMajorMatrixTempl<T> & eval,
 
 template <>
 void
-ColumnMajorMatrixTempl<DualReal>::eigen(ColumnMajorMatrixTempl<DualReal> &,
-                                        ColumnMajorMatrixTempl<DualReal> &) const
+ColumnMajorMatrixTempl<ADReal>::eigen(ColumnMajorMatrixTempl<ADReal> &,
+                                      ColumnMajorMatrixTempl<ADReal> &) const
 {
   mooseError("Eigen solves with AD types is not supported.");
 }
@@ -227,10 +225,10 @@ ColumnMajorMatrixTempl<T>::eigenNonsym(ColumnMajorMatrixTempl<T> & eval_real,
 
 template <>
 void
-ColumnMajorMatrixTempl<DualReal>::eigenNonsym(ColumnMajorMatrixTempl<DualReal> &,
-                                              ColumnMajorMatrixTempl<DualReal> &,
-                                              ColumnMajorMatrixTempl<DualReal> &,
-                                              ColumnMajorMatrixTempl<DualReal> &) const
+ColumnMajorMatrixTempl<ADReal>::eigenNonsym(ColumnMajorMatrixTempl<ADReal> &,
+                                            ColumnMajorMatrixTempl<ADReal> &,
+                                            ColumnMajorMatrixTempl<ADReal> &,
+                                            ColumnMajorMatrixTempl<ADReal> &) const
 {
   mooseError("Eigen solves with AD types is not supported.");
 }
@@ -239,6 +237,7 @@ template <typename T>
 void
 ColumnMajorMatrixTempl<T>::exp(ColumnMajorMatrixTempl<T> & z) const
 {
+  using std::exp;
   this->checkSquareness();
 
   ColumnMajorMatrixTempl<T> a(*this);
@@ -250,7 +249,7 @@ ColumnMajorMatrixTempl<T>::exp(ColumnMajorMatrixTempl<T> & z) const
   a.eigenNonsym(evals_real, evals_img, evec_right, evec_left);
 
   for (unsigned int i = 0; i < _n_rows; i++)
-    evals_real2(i, i) = std::exp(evals_real(i, 0));
+    evals_real2(i, i) = exp(evals_real(i, 0));
 
   evec_right.inverse(evec_right_inverse);
 
@@ -302,7 +301,7 @@ ColumnMajorMatrixTempl<T>::checkShapeEquality(const ColumnMajorMatrixTempl<T> & 
 
 template <>
 void
-ColumnMajorMatrixTempl<DualReal>::inverse(ColumnMajorMatrixTempl<DualReal> &) const
+ColumnMajorMatrixTempl<ADReal>::inverse(ColumnMajorMatrixTempl<ADReal> &) const
 {
   mooseError("Inverse solves with AD types is not supported for the ColumnMajorMatrix class.");
 }
@@ -311,13 +310,14 @@ template <typename T>
 inline ColumnMajorMatrixTempl<T>
 ColumnMajorMatrixTempl<T>::abs()
 {
+  using std::abs;
   ColumnMajorMatrixTempl<T> & s = (*this);
 
   ColumnMajorMatrixTempl<T> ret_matrix(_n_rows, _n_cols);
 
   for (unsigned int j = 0; j < _n_cols; j++)
     for (unsigned int i = 0; i < _n_rows; i++)
-      ret_matrix(i, j) = std::abs(s(i, j));
+      ret_matrix(i, j) = abs(s(i, j));
 
   return ret_matrix;
 }
@@ -326,8 +326,9 @@ template <typename T>
 inline T
 ColumnMajorMatrixTempl<T>::norm()
 {
-  return std::sqrt(doubleContraction(*this));
+  using std::sqrt;
+  return sqrt(doubleContraction(*this));
 }
 
 template class ColumnMajorMatrixTempl<Real>;
-template class ColumnMajorMatrixTempl<DualReal>;
+template class ColumnMajorMatrixTempl<ADReal>;

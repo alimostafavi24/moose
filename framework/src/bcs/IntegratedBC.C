@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -15,6 +15,7 @@
 #include "SystemBase.h"
 #include "MooseVariableFE.h"
 #include "MooseVariableScalar.h"
+#include "FEProblemBase.h"
 
 #include "libmesh/quadrature.h"
 
@@ -30,7 +31,7 @@ IntegratedBC::IntegratedBC(const InputParameters & parameters)
     MooseVariableInterface<Real>(this,
                                  false,
                                  "variable",
-                                 Moose::VarKindType::VAR_NONLINEAR,
+                                 Moose::VarKindType::VAR_SOLVER,
                                  Moose::VarFieldType::VAR_FIELD_STANDARD),
     _var(*mooseVariable()),
     _normals(_assembly.normals()),
@@ -97,11 +98,8 @@ IntegratedBC::computeResidual()
   accumulateTaggedLocalResidual();
 
   if (_has_save_in)
-  {
-    Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
     for (unsigned int i = 0; i < _save_in.size(); i++)
       _save_in[i]->sys().solution().add_vector(_local_re, _save_in[i]->dofIndices());
-  }
 }
 
 void
@@ -128,7 +126,6 @@ IntegratedBC::computeJacobian()
     for (unsigned int i = 0; i < rows; i++)
       diag(i) = _local_ke(i, i);
 
-    Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
     for (unsigned int i = 0; i < _diag_save_in.size(); i++)
       _diag_save_in[i]->sys().solution().add_vector(diag, _diag_save_in[i]->dofIndices());
   }
@@ -149,10 +146,9 @@ IntegratedBC::computeOffDiagJacobian(const unsigned int jvar_num)
 
   precalculateOffDiagJacobian(jvar_num);
 
-  // This (undisplaced) jvar could potentially yield the wrong phi size if this object is acting
-  // on the displaced mesh, so we obtain the variable on the proper system
-  auto phi_size = jvar.dofIndices().size();
-  mooseAssert(phi_size * jvar.count() == _local_ke.n(),
+  const auto n_dofs = jvar.dofIndices().size();
+  const auto phi_size = n_dofs / jvar.count();
+  mooseAssert(n_dofs == _local_ke.n(),
               "The size of the phi container does not match the number of local Jacobian columns");
 
   for (_qp = 0; _qp < _qrule->n_points(); _qp++)
@@ -178,4 +174,27 @@ IntegratedBC::computeOffDiagJacobianScalar(const unsigned int jvar)
         _local_ke(_i, _j) += _JxW[_qp] * _coord[_qp] * computeQpOffDiagJacobianScalar(jvar);
 
   accumulateTaggedLocalMatrix();
+}
+
+void
+IntegratedBC::computeResidualAndJacobian()
+{
+  computeResidual();
+
+  for (const auto & [ivariable, jvariable] : _fe_problem.couplingEntries(_tid, _sys.number()))
+  {
+    const unsigned int ivar = ivariable->number();
+    const unsigned int jvar = jvariable->number();
+
+    if (ivar != _var.number())
+      continue;
+
+    if (_is_implicit)
+    {
+      prepareShapes(jvar);
+      computeOffDiagJacobian(jvar);
+    }
+  }
+
+  /// TODO: add nonlocal Jacobians and scalar Jacobians
 }

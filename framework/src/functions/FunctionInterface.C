@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -20,7 +20,11 @@ FunctionInterface::validParams()
 }
 
 FunctionInterface::FunctionInterface(const MooseObject * moose_object)
-  : _fni_params(moose_object->parameters()),
+  :
+#ifdef MOOSE_KOKKOS_ENABLED
+    _fni_object(*moose_object),
+#endif
+    _fni_params(moose_object->parameters()),
     _fni_feproblem(*_fni_params.getCheckedPointerParam<FEProblemBase *>("_fe_problem_base")),
     _fni_tid(_fni_params.have_parameter<THREAD_ID>("_tid") ? _fni_params.get<THREAD_ID>("_tid") : 0)
 {
@@ -29,7 +33,7 @@ FunctionInterface::FunctionInterface(const MooseObject * moose_object)
 const Function &
 FunctionInterface::getFunction(const std::string & name) const
 {
-  return _fni_feproblem.getFunction(_fni_params.get<FunctionName>(name), _fni_tid);
+  return getFunctionByName(_fni_params.get<FunctionName>(name));
 }
 
 const Function &
@@ -38,25 +42,14 @@ FunctionInterface::getFunctionByName(const FunctionName & name) const
   return _fni_feproblem.getFunction(name, _fni_tid);
 }
 
-template <typename T>
-const FunctionTempl<T> &
-FunctionInterface::getFunction(const std::string & name) const
+bool
+FunctionInterface::hasFunction(const std::string & param_name) const
 {
-  return _fni_feproblem.getFunction<T>(_fni_params.get<FunctionName>(name), _fni_tid);
+  return hasFunctionByName(_fni_params.get<FunctionName>(param_name));
 }
 
-template <typename T>
-const FunctionTempl<T> &
-FunctionInterface::getFunctionByName(const FunctionName & name) const
+bool
+FunctionInterface::hasFunctionByName(const FunctionName & name) const
 {
-  return _fni_feproblem.getFunction<T>(name, _fni_tid);
+  return _fni_feproblem.hasFunction(name, _fni_tid);
 }
-
-template const FunctionTempl<Real> &
-FunctionInterface::getFunction<Real>(const std::string & name) const;
-template const FunctionTempl<ADReal> &
-FunctionInterface::getFunction<ADReal>(const std::string & name) const;
-template const FunctionTempl<Real> &
-FunctionInterface::getFunctionByName<Real>(const FunctionName & name) const;
-template const FunctionTempl<ADReal> &
-FunctionInterface::getFunctionByName<ADReal>(const FunctionName & name) const;

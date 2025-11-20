@@ -1,11 +1,12 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
 //*
 //* Licensed under LGPL 2.1, please see LICENSE for details
 //* https://www.gnu.org/licenses/lgpl-2.1.html
+
 #include "ReactorTestApp.h"
 #include "ReactorApp.h"
 #include "Moose.h"
@@ -16,10 +17,13 @@ InputParameters
 ReactorTestApp::validParams()
 {
   InputParameters params = ReactorApp::validParams();
+
+  params.set<bool>(MeshGeneratorSystem::allow_data_driven_param) = true;
+
   return params;
 }
 
-ReactorTestApp::ReactorTestApp(InputParameters parameters) : MooseApp(parameters)
+ReactorTestApp::ReactorTestApp(const InputParameters & parameters) : MooseApp(parameters)
 {
   ReactorTestApp::registerAll(
       _factory, _action_factory, _syntax, getParam<bool>("allow_test_objects"));
@@ -41,7 +45,7 @@ ReactorTestApp::registerAll(Factory & f, ActionFactory & af, Syntax & s, bool us
 void
 ReactorTestApp::registerApps()
 {
-  registerApp(ReactorApp);
+  ReactorApp::registerApps();
   registerApp(ReactorTestApp);
 }
 

@@ -33,7 +33,7 @@ There are many more options available that are described in the [Transient Execu
 It is also common to use more sophisticated ways for
 time-stepping through simulations. [Example 16](examples/ex16_timestepper.md) goes over some of
 this and details about specific time stepping schemes are provided in the
-[Timestepper System documentation](syntax/Executioner/TimeStepper/index.md).
+[Timestepper System documentation](syntax/Executioner/TimeSteppers/index.md).
 
 ## Outputs
 
@@ -41,9 +41,11 @@ Here are solution snapshots from the beginning and end times from running `ex06-
 
 !media large_media/examples/ex6-1-out.png
        style=width:47%;display:inline-flex;
+       alt=The distribution of the diffused quantity at the start of the simulation.
 
 !media large_media/examples/ex6-2-out.png
        style=width:47%;display:inline-flex;margin-left:3%
+       alt=The distribution of the diffused quantity at the end of the simulation.
 
 ## Complete Source Files
 

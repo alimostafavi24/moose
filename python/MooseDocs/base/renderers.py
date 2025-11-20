@@ -1,5 +1,5 @@
 #* This file is part of the MOOSE framework
-#* https://www.mooseframework.org
+#* https://mooseframework.inl.gov
 #*
 #* All rights reserved, see COPYRIGHT for full restrictions
 #* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -15,6 +15,7 @@ import traceback
 import codecs
 import shutil
 import moosetree
+import copy
 
 import MooseDocs
 from ..common import exceptions, mixins, report_error, Storage
@@ -229,18 +230,16 @@ class HTMLRenderer(Renderer):
         Return the default configuration.
         """
         config = Renderer.defaultConfig()
-        config['google_analytics'] = (False, "Enable Google Analytics.")
         config['favicon'] = (None, "The location of the website favicon.")
         config['extra-css'] = ([], "List of additional CSS files to include.")
         config['extra-js'] = ([],"List of additional JS files to include.")
+        config['with_dap'] = (None, "If set, enable DAP (Digital Analytics Program " \
+                              ", see digital.gov/guides/dap) for this agency")
         return config
 
     def __init__(self, *args, **kwargs):
         Renderer.__init__(self, *args, **kwargs)
         self.__global_files = dict()
-
-        if self.get('google_analytics', False):
-            self.addJavaScript('google_analytics', 'js/google_analytics.js')
 
     def getRoot(self):
         """Return the result node for inserting rendered html nodes."""
@@ -249,18 +248,24 @@ class HTMLRenderer(Renderer):
         html.Tag(head, 'meta', charset="UTF-8", close=False)
         return html.Tag(root, 'body')
 
-    def addJavaScript(self, name, filename, page=None, head=False, **kwargs):
+    def addJavaScript(self, name, contents, page=None, head=False, **kwargs):
         """
         Add a javascript dependency. Do not attempt to call this function to add a global renderer
         file, i.e., with `page=None`, from within the read/tokenize/render/write methods.
+
+        If contents is a javascript file (ends in .js) or is a URL (begins with https), treat
+        it as an include. Otherwise, treat it as javascript to be imported.
         """
         key = (name, 'head_javascript' if head else 'javascript')
 
+        tag_key = 'src' if (contents.startswith('http') or contents.endswith('.js')) else 'string'
+        kwargs[tag_key] = contents
+
         # Add a global script to be included in all HTML pages, otherwise add a per-page script
         if page is None:
-            self.__global_files[key] = (filename, kwargs)
+            self.__global_files[key] = (contents, kwargs)
         else:
-            page.attributes.setdefault('renderer_files', dict())[key] = (filename, kwargs)
+            page.attributes.setdefault('renderer_files', dict())[key] = (contents, kwargs)
 
     def addCSS(self, name, filename, page=None, **kwargs):
         """
@@ -294,6 +299,19 @@ class HTMLRenderer(Renderer):
             html.Tag(head, 'link', rel="icon", type="image/x-icon", href=rel(favicon), \
                      sizes="16x16 32x32 64x64 128x128")
 
+        # Add the DAP Google Analytics script (see digital.gov/guides/dap)
+        with_dap = self.get('with_dap')
+        if with_dap:
+            assert isinstance(with_dap, str)
+            html.Tag(
+                body.parent,
+                'script',
+                **{'async': True},
+                type='text/javascript',
+                src=f'https://dap.digitalgov.gov/Universal-Federated-Analytics-Min.js?agency={with_dap}',
+                id='_fed_an_ua_tag'
+            )
+
         # Add the extra-css, this is done here to make sure it shows up last
         files = {**self.__global_files, **page.get('renderer_files', dict())}
         for i, css in enumerate(self.get('extra-css')):
@@ -304,10 +322,12 @@ class HTMLRenderer(Renderer):
             name, kwargs = files.pop((key, context))
             if context == 'css':
                 html.Tag(head, 'link', href=rel(name), type="text/css", rel="stylesheet", **kwargs)
-            elif context == 'head_javascript':
-                html.Tag(head, 'script', type="text/javascript", src=rel(name), **kwargs)
-            elif context == 'javascript':
-                html.Tag(body.parent, 'script', type="text/javascript", src=rel(name), **kwargs)
+            elif context.endswith('javascript'):
+                js_node = head if context == 'head_javascript' else body.parent
+                if 'src' in kwargs:
+                    kwargs = copy.copy(kwargs)
+                    kwargs['src'] = rel(kwargs['src'])
+                html.Tag(js_node, 'script', type="text/javascript", **kwargs)
 
 class MaterializeRenderer(HTMLRenderer):
     """
@@ -449,8 +469,8 @@ class RevealRenderer(HTMLRenderer):
         HTMLRenderer.__init__(self, *args, **kwargs)
         self.addCSS('reveal', "contrib/reveal/reveal.css")
         self.addCSS('reveal_theme', "contrib/reveal/{}.css".format(self.get('theme')), id_="theme")
-        self.addCSS('reveal_css', "css/reveal_moose.css")
         self.addCSS('prism', "contrib/prism/prism.min.css")
+        self.addCSS('reveal_css', "css/reveal_moose.css")
 
         self.addJavaScript('reveal', "contrib/reveal/reveal.js")
         self.addJavaScript('prism', "contrib/prism/prism.min.js")

@@ -41,9 +41,9 @@ MOOSE input file syntax basically works like this:
 ...
 ```
 
-Note that single `'` and double `"` quotes can be interchangably to quote strings (as long as
-the start quote and end quote character are the same) and are functionally equivalent. They do
-however behave differently when auto-formatting input files with [`hit format`](hit.md).
+Note that single `'` and double `"` quotes can be used interchangeably to quote strings (as long
+as the start quote and end quote character are the same) and are functionally equivalent. They
+do however behave differently when auto-formatting input files with [`hit format`](hit.md).
 Single quotes strings will not be reformatted, while double quoted strings are reindented
 and reflowed.
 
@@ -116,7 +116,81 @@ Here are some important details about how brace-expressions are evaluated:
 - If there are no arguments in the brace-expression beyond the "cmd" (e.g. `${foo}`), then the
   `replace` command is implied: e.g. `${foo}` means `${replace foo}`.
 
-## Overridding input parameters from the command line.
+## Overriding input parameters from the command line
 
 See the [CommandLine.md] object for information on how input parameters can be
 changed on the command line.
+
+## Includes
+
+Other input files may be included using the following syntax:
+
+```
+!include path/to/input.i
+```
+
+This can be used in any arbitrary nested context in an input file, and included files
+can include other files. The only requirement is that the included files
+must contain a set of syntactically complete blocks or parameters.
+
+Functionally, including a file is equivalent to inserting the
+text of the file at the `!include` location.
+
+!alert warning title=Included input parameters cannot be overridden by default
+Note that parameters from the parent or included files do not override each other by default,
+as this is just interpreted as providing the input parameter twice, resulting in a parsing error.
+To override parameters, you must either use command-line arguments or the explicit
+override syntax defined below.
+
+!alert! tip title=Viewing a single equivalent input file
+If you would like to view an equivalent input file after the include operations
+and parameter overrides (see the following section), you can use the `hit` utility:
+
+```
+~/projects/moose/framework/contrib/hit/hit braceexpr myinput.i
+```
+!alert-end!
+
+## Parameter override syntax
+
+Ordinarily, redefining a parameter results in an input error:
+
+```
+param1 = 3
+param1 = 4   # error due to duplicate parameter
+```
+
+However, there is a syntax for explicitly specifying that you would like to
+allow overriding a previously defined value, using either `:=` or `:override=`
+instead of `=`:
+
+```
+param1 = 3
+param1 := 4           # not an error; now param1 is 4 instead of 3
+param1 :override= 5   # now param1 is 5
+```
+
+Note that `:=` and `:override=` are exactly the same; the latter is provided for
+those wanting to make the syntax more visible to a reader of the input file.
+
+As noted with the `!include` syntax above, redefining a parameter with the
+`=` assignment operator results in an duplicate parameter error; the explicit
+override syntax can be used to fix this:
+
+`myinput.i`:
+
+```
+!include base.i
+
+[BlockA]
+  param1 := new_value   # using "=" would result in an error
+[]
+```
+
+`base.i`:
+
+```
+[BlockA]
+  param1 = original_value
+[]
+```

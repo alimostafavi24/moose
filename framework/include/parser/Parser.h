@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -9,26 +9,15 @@
 
 #pragma once
 
-// MOOSE includes
-#include "ConsoleStreamInterface.h"
 #include "MooseTypes.h"
-#include "InputParameters.h"
-#include "Syntax.h"
 
-#include "hit.h"
+#include "hit/hit.h"
 
 #include <vector>
 #include <string>
 #include <iomanip>
-
-// Forward declarations
-class ActionWarehouse;
-class SyntaxTree;
-class MooseApp;
-class Factory;
-class ActionFactory;
-class GlobalParamsAction;
-class JsonSyntaxTree;
+#include <optional>
+#include <filesystem>
 
 class FuncParseEvaler : public hit::Evaler
 {
@@ -44,226 +33,221 @@ public:
   eval(hit::Field * n, const std::list<std::string> & args, hit::BraceExpander & exp);
 };
 
+class DupParamWalker : public hit::Walker
+{
+public:
+  virtual void
+  walk(const std::string & fullpath, const std::string & /*nodepath*/, hit::Node * n) override;
+
+  std::vector<hit::ErrorMessage> errors;
+
+private:
+  std::map<std::string, hit::Node *> _have;
+};
+
+class BadActiveWalker : public hit::Walker
+{
+public:
+  virtual void walk(const std::string & /*fullpath*/,
+                    const std::string & /*nodepath*/,
+                    hit::Node * section) override;
+  std::vector<hit::ErrorMessage> errors;
+};
+
+class CompileParamWalker : public hit::Walker
+{
+public:
+  typedef std::map<std::string, hit::Node *> ParamMap;
+  CompileParamWalker(ParamMap & map) : _map(map) {};
+
+  virtual void
+  walk(const std::string & fullpath, const std::string & /*nodepath*/, hit::Node * n) override;
+
+private:
+  ParamMap & _map;
+};
+
+class OverrideParamWalker : public hit::Walker
+{
+public:
+  OverrideParamWalker(const CompileParamWalker::ParamMap & map) : _map(map) {}
+
+  void walk(const std::string & fullpath, const std::string & /*nodepath*/, hit::Node * n) override;
+  std::vector<std::string> warnings;
+
+private:
+  const CompileParamWalker::ParamMap & _map;
+};
+
 /**
  * Class for parsing input files. This class utilizes the GetPot library for actually tokenizing and
  * parsing files. It is not currently designed for extensibility. If you wish to build your own
  * parser, please contact the MOOSE team for guidance.
  */
-class Parser : public ConsoleStreamInterface, public hit::Walker
+class Parser
 {
 public:
-  enum SyntaxFormatterType
+  /**
+   * Constructor given a list of input files, given in \p input_filenames.
+   *
+   * Optionally, the file contents can be provided via text in \p input_text.
+   */
+  Parser(const std::vector<std::string> & input_filenames,
+         const std::optional<std::vector<std::string>> & input_text = {});
+  /**
+   * Constructor, given a file in \p input_filename.
+   *
+   * Optionally, the file contents can be provided via text in \p input_text.
+   */
+  Parser(const std::string & input_filename, const std::optional<std::string> & input_text = {});
+
+  struct Error : public hit::Error
   {
-    INPUT_FILE,
-    YAML
+    Error() = delete;
+    Error(const std::vector<hit::ErrorMessage> & error_messages);
   };
 
-  Parser(MooseApp & app, ActionWarehouse & action_wh);
-
-  virtual ~Parser();
+  /**
+   * Parses the inputs
+   */
+  void parse();
 
   /**
-   * Return the primary (first) filename that was parsed
+   * @return The root HIT node if it exists
+   *
+   * If this is null, it means we haven't parsed yet
    */
-  std::string getPrimaryFileName(bool stripLeadingPath = true) const;
+  ///@{
+  const hit::Node * queryRoot() const { return _root.get(); }
+  hit::Node * queryRoot() { return _root.get(); }
+  ///@}
 
   /**
-   * Parse an input file consisting of hit syntax and setup objects
-   * in the MOOSE derived application
+   * @return The root HIT node with error checking on if it exists
+   *
+   * If it doesn't exist, it means we haven't parsed yet
    */
-  void parse(const std::vector<std::string> & input_filenames);
+  hit::Node & getRoot();
 
   /**
-   * This function attempts to extract values from the input file based on the contents of
-   * the passed parameters objects.  It handles a number of various types with dynamic casting
-   * including vector types
+   * @return The root command line HIT node if it exists
+   *
+   * If this is null, it means we haven't parsed yet
    */
-  void extractParams(const std::string & prefix, InputParameters & p);
+  ///@{
+  const hit::Node * queryCommandLineRoot() const { return _cli_root.get(); }
+  hit::Node * queryCommandLineRoot() { return _cli_root.get(); }
+  ///@}
 
   /**
-   * Creates a syntax formatter for printing
+   * @return The root command line HIT node, with error checking on if it exists
+   *
+   * If it doesn't exist, it means we haven't parsed yet
    */
-  void initSyntaxFormatter(SyntaxFormatterType type, bool dump_mode);
+  ///@{
+  const hit::Node & getCommandLineRoot() const;
+  hit::Node & getCommandLineRoot();
+  ///@}
 
   /**
-   * Use MOOSE Factories to construct a full parse tree for documentation or echoing input.
+   * @return The names of the inputs
    */
-  void buildFullTree(const std::string & search_string);
+  const std::vector<std::string> & getInputFileNames() const { return _input_filenames; }
 
   /**
-   * Use MOOSE Factories to construct a parameter tree for documentation or echoing input.
+   * @return The input file contents
    */
-  void buildJsonSyntaxTree(JsonSyntaxTree & tree) const;
+  const std::vector<std::string> & getInputText() const { return _input_text; }
 
-  void walk(const std::string & fullpath, const std::string & nodepath, hit::Node * n);
+  /*
+   * Get extracted application type from parser
+   */
+  const std::string & getAppType() const { return _app_type; }
 
-  void errorCheck(const Parallel::Communicator & comm, bool warn_unused, bool err_unused);
-
-  std::vector<std::string> listValidParams(std::string & section_name);
+  /*
+   * Set the application type in parser
+   */
+  void setAppType(const std::string & app_type) { _app_type = app_type; }
 
   /**
-   * Marks MOOSE hit syntax from supplied command-line arguments
+   * Sets the HIT parameters from the command line
    */
-  std::string hitCLIFilter(std::string appname, const std::vector<std::string> & argv);
-
-protected:
-  /**
-   * Helper functions for setting parameters of arbitrary types - bodies are in the .C file
-   * since they are called only from this Object
-   */
-  /// Template method for setting any scalar type parameter read from the input file or command line
-  template <typename T, typename Base>
-  void setScalarParameter(const std::string & full_name,
-                          const std::string & short_name,
-                          InputParameters::Parameter<T> * param,
-                          bool in_global,
-                          GlobalParamsAction * global_block);
-
-  template <typename T, typename UP_T, typename Base>
-  void setScalarValueTypeParameter(const std::string & full_name,
-                                   const std::string & short_name,
-                                   InputParameters::Parameter<T> * param,
-                                   bool in_global,
-                                   GlobalParamsAction * global_block);
-
-  /// Template method for setting any vector type parameter read from the input file or command line
-  template <typename T, typename Base>
-  void setVectorParameter(const std::string & full_name,
-                          const std::string & short_name,
-                          InputParameters::Parameter<std::vector<T>> * param,
-                          bool in_global,
-                          GlobalParamsAction * global_block);
-
-  /// Template method for setting any map type parameter read from the input file or command line
-  template <typename KeyType, typename MappedType>
-  void setMapParameter(const std::string & full_name,
-                       const std::string & short_name,
-                       InputParameters::Parameter<std::map<KeyType, MappedType>> * param,
-                       bool in_global,
-                       GlobalParamsAction * global_block);
+  void setCommandLineParams(const std::vector<std::string> & params);
 
   /**
-   * Sets an input parameter representing a file path using input file data.  The file path is
-   * modified to be relative to the directory this application's input file is in.
+   * @return The file name of the last input
    */
-  template <typename T>
-  void setFilePathParam(const std::string & full_name,
-                        const std::string & short_name,
-                        InputParameters::Parameter<T> * param,
-                        InputParameters & params,
-                        bool in_global,
-                        GlobalParamsAction * global_block);
+  const std::string & getLastInputFileName() const;
 
   /**
-   * Sets an input parameter representing a vector of file paths using input file data.  The file
-   * paths are modified to be relative to the directory this application's input file is in.
+   * @return The path of the last input
    */
-  template <typename T>
-  void setVectorFilePathParam(const std::string & full_name,
-                              const std::string & short_name,
-                              InputParameters::Parameter<std::vector<T>> * param,
-                              InputParameters & params,
-                              bool in_global,
-                              GlobalParamsAction * global_block);
-  /**
-   * Template method for setting any double indexed type parameter read from the input file or
-   * command line.
-   */
-  template <typename T>
-  void setDoubleIndexParameter(const std::string & full_name,
-                               const std::string & short_name,
-                               InputParameters::Parameter<std::vector<std::vector<T>>> * param,
-                               bool in_global,
-                               GlobalParamsAction * global_block);
+  std::filesystem::path getLastInputFilePath() const { return getLastInputFileName(); }
 
   /**
-   * Template method for setting any triple indexed type parameter read from the input file or
-   * command line.
+   * Set whether or not to throw Parse::Error on errors
+   *
+   * This is used by the MooseServer to capture errors while retaining the root if possible
    */
-  template <typename T>
-  void setTripleIndexParameter(
-      const std::string & full_name,
-      const std::string & short_name,
-      InputParameters::Parameter<std::vector<std::vector<std::vector<T>>>> * param,
-      bool in_global,
-      GlobalParamsAction * global_block);
+  void setThrowOnError(const bool throw_on_error) { _throw_on_error = throw_on_error; }
 
   /**
-   * Template method for setting any multivalue "scalar" type parameter read from the input file or
-   * command line.  Examples include "Point" and "RealVectorValue".
+   * @return Whether or not to throw Parse::Error on errors
+   *
+   * This is used by the MooseServer to capture errors while retaining the root if possible
    */
-  template <typename T>
-  void setScalarComponentParameter(const std::string & full_name,
-                                   const std::string & short_name,
-                                   InputParameters::Parameter<T> * param,
-                                   bool in_global,
-                                   GlobalParamsAction * global_block);
+  bool getThrowOnError() const { return _throw_on_error; }
 
   /**
-   * Template method for setting several multivalue "scalar" type parameter read from the input
-   * file or command line.  Examples include "Point" and "RealVectorValue".
+   * @returns The variables that have been extracted so far.
+   *
+   * These are the variables that have been used during brace expansion.
    */
-  template <typename T>
-  void setVectorComponentParameter(const std::string & full_name,
-                                   const std::string & short_name,
-                                   InputParameters::Parameter<std::vector<T>> * param,
-                                   bool in_global,
-                                   GlobalParamsAction * global_block);
+  const std::set<std::string> & getExtractedVars() const { return _extracted_vars; }
+  /**
+   * Helper for accumulating errors from a walker into an accumulation of errors
+   */
+  ///@{
+  static void appendErrorMessages(std::vector<hit::ErrorMessage> & to,
+                                  const std::vector<hit::ErrorMessage> & from);
+  static void appendErrorMessages(std::vector<hit::ErrorMessage> & to, const hit::Error & error);
+  ///@}
 
   /**
-   * Template method for setting vector of several multivalue "scalar" type parameter read from the
-   * input file or command line.  Examples include vectors of several "Point"s and
-   * "RealVectorValue"s such as (a three-element vector; each element is several "Point"s):
-   * points_values = '0 0 0
-   *                  0 0 1;
-   *                  0 1 0;
-   *                  1 0 0
-   *                  1 1 0
-   *                  1 1 1'
+   * Helper for combining error messages into a single, newline separated message
    */
-  template <typename T>
-  void
-  setVectorVectorComponentParameter(const std::string & full_name,
-                                    const std::string & short_name,
-                                    InputParameters::Parameter<std::vector<std::vector<T>>> * param,
-                                    bool in_global,
-                                    GlobalParamsAction * global_block);
+  static std::string joinErrorMessages(const std::vector<hit::ErrorMessage> & error_messages);
 
-  std::unique_ptr<hit::Node> _cli_root = nullptr;
-  std::unique_ptr<hit::Node> _root = nullptr;
-  std::vector<std::string> _secs_need_first;
-
-  /// The MooseApp this Parser is part of
-  MooseApp & _app;
-  /// The Factory associated with that MooseApp
-  Factory & _factory;
-  /// Action warehouse that will be filled by actions
-  ActionWarehouse & _action_wh;
-  /// The Factory that builds actions
-  ActionFactory & _action_factory;
-  /// Reference to an object that defines input file syntax
-  Syntax & _syntax;
-
-  /// Object for holding the syntax parse tree
-  std::unique_ptr<SyntaxTree> _syntax_formatter;
-
-  /// The input file names that are used for parameter extraction
-  std::vector<std::string> _input_filenames;
-
-  /// The set of all variables extracted from the input file
-  std::set<std::string> _extracted_vars;
-
-  /// Boolean to indicate whether parsing has started (sections have been extracted)
-  bool _sections_read;
-
-  /// The current parameter object for which parameters are being extracted
-  InputParameters * _current_params;
-
-  /// The current stream object used for capturing errors during extraction
-  std::ostringstream * _current_error_stream;
+  /**
+   * Helper for throwing an error with the given messages.
+   *
+   * If throwOnError(), throw a Parser::Error (for the MooseServer).
+   * Otherwise, use mooseError() (for standard runs).
+   */
+  void parseError(std::vector<hit::ErrorMessage> messages) const;
 
 private:
-  std::string _errmsg;
-  std::string _warnmsg;
-  void walkRaw(std::string fullpath, std::string nodepath, hit::Node * n);
+  /// The root node, which owns the whole tree
+  std::unique_ptr<hit::Node> _root;
+
+  /// The input file names
+  const std::vector<std::string> _input_filenames;
+
+  /// The input text (may be filled during parse())
+  std::vector<std::string> _input_text;
+
+  /// The root node for command line hit arguments
+  std::unique_ptr<hit::Node> _cli_root;
+
+  /// The application types extracted from [Application] block
+  std::string _app_type;
+
+  /// Whether or not to throw on error
+  bool _throw_on_error;
+
+  /// The command line HIT parameters (if any)
+  std::optional<std::vector<std::string>> _command_line_params;
+
+  /// Variables that have been extracted during brace expansion
+  std::set<std::string> _extracted_vars;
 };

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -33,6 +33,7 @@ ActionWarehouse::ActionWarehouse(MooseApp & app, Syntax & syntax, ActionFactory 
     _show_action_dependencies(false),
     _show_actions(false),
     _show_parser(false),
+    _current_action(nullptr),
     _mesh(nullptr),
     _displaced_mesh(nullptr)
 {
@@ -111,7 +112,7 @@ ActionWarehouse::addActionBlock(std::shared_ptr<Action> action)
    *    means that this Action was not built by the Parser.  It was most likely created through a
    *    Meta-Action (See Case 3 for exception). In this case, the ActionFactory itself would have
    *    already set the task it found from the build info used to construct the Action so we'd
-   *    arbitrarily satisify a single task in this case.
+   *    arbitrarily satisfy a single task in this case.
    *
    * 3. The current Action is registered with only a single syntax block. In this case we can simply
    *    re-use the current instance to act and satisfy _all_ registered tasks. This is the normal
@@ -121,7 +122,7 @@ ActionWarehouse::addActionBlock(std::shared_ptr<Action> action)
   if (action->specificTaskName() != "") // Case 1
     tasks.insert(action->specificTaskName());
   else if (registered_identifier == "" &&
-           _syntax.getSyntaxByAction(action->type()).size() > 1) // Case 2
+           _syntax.getNonDeprecatedSyntaxByAction(action->type()).size() > 1) // Case 2
   {
     std::set<std::string> local_tasks = action->getAllTasks();
     mooseAssert(local_tasks.size() == 1, "More than one task inside of the " << action->name());
@@ -144,10 +145,9 @@ ActionWarehouse::addActionBlock(std::shared_ptr<Action> action)
     {
       const InputParameters & mparams = moa->getObjectParams();
 
-      if (mparams.have_parameter<std::string>("_moose_base"))
+      if (mparams.hasBase())
       {
-        const std::string & base = mparams.get<std::string>("_moose_base");
-
+        const std::string & base = mparams.getBase();
         if (!_syntax.verifyMooseObjectTask(base, task))
           mooseError("Task ", task, " is not registered to build ", base, " derived objects");
       }
@@ -215,13 +215,18 @@ ActionWarehouse::buildBuildableActions(const std::string & task)
     auto it_pair = _action_factory.getActionsByTask(task);
     for (const auto & action_pair : as_range(it_pair))
     {
-      InputParameters params = _action_factory.getValidParams(action_pair.second);
+      const auto & type = action_pair.second;
+      InputParameters params = _action_factory.getValidParams(type);
       params.set<ActionWarehouse *>("awh") = this;
+
+      std::string name = "auto_" + type;
+      std::transform(
+          name.begin(), name.end(), name.begin(), [](const auto v) { return std::tolower(v); });
 
       if (params.areAllRequiredParamsValid())
       {
         params.set<std::string>("registered_identifier") = "(AutoBuilt)";
-        addActionBlock(_action_factory.create(action_pair.second, "", params));
+        addActionBlock(_action_factory.create(type, name, params));
         ret_value = true;
       }
     }
@@ -344,6 +349,7 @@ ActionWarehouse::executeAllActions()
   for (const auto & task : _ordered_names)
   {
     executeActionsWithAction(task);
+    std::scoped_lock lock(_completed_tasks_mutex);
     _completed_tasks.insert(task);
     if (_final_task != "" && task == _final_task)
       break;
@@ -366,9 +372,10 @@ ActionWarehouse::executeActionsWithAction(const std::string & task)
   // Set the current task name
   _current_task = task;
 
-  for (_act_iter = actionBlocksWithActionBegin(task); _act_iter != actionBlocksWithActionEnd(task);
-       ++_act_iter)
+  for (auto it = actionBlocksWithActionBegin(task); it != actionBlocksWithActionEnd(task); ++it)
   {
+    _current_action = *it;
+
     if (_show_actions)
     {
       MemoryUtils::Stats stats;
@@ -377,14 +384,16 @@ ActionWarehouse::executeActionsWithAction(const std::string & task)
           MemoryUtils::convertBytes(stats._physical_memory, MemoryUtils::MemUnits::Megabytes);
       _console << "[DBG][ACT] "
                << "TASK (" << COLOR_YELLOW << std::setw(24) << task << COLOR_DEFAULT << ") "
-               << "TYPE (" << COLOR_YELLOW << std::setw(32) << (*_act_iter)->type() << COLOR_DEFAULT
-               << ") "
-               << "NAME (" << COLOR_YELLOW << std::setw(16) << (*_act_iter)->name() << COLOR_DEFAULT
-               << ") Memory usage " << usage << "MB" << std::endl;
+               << "TYPE (" << COLOR_YELLOW << std::setw(32) << _current_action->type()
+               << COLOR_DEFAULT << ") "
+               << "NAME (" << COLOR_YELLOW << std::setw(16) << _current_action->name()
+               << COLOR_DEFAULT << ") Memory usage " << usage << "MB" << std::endl;
     }
 
-    (*_act_iter)->timedAct();
+    _current_action->timedAct();
   }
+
+  _current_action = nullptr;
 }
 
 void
@@ -445,7 +454,7 @@ ActionWarehouse::problem()
 std::string
 ActionWarehouse::getCurrentActionName() const
 {
-  return (*_act_iter)->parameters().blockFullpath();
+  return getCurrentAction()->parameters().getHitNode()->fullpath();
 }
 
 const std::string &
@@ -455,9 +464,16 @@ ActionWarehouse::getMooseAppName()
 }
 
 bool
+ActionWarehouse::hasTask(const std::string & task) const
+{
+  return _action_factory.isRegisteredTask(task);
+}
+
+bool
 ActionWarehouse::isTaskComplete(const std::string & task) const
 {
-  if (!_action_factory.isRegisteredTask(task))
+  if (!hasTask(task))
     mooseError("\"", task, "\" is not a registered task.");
+  std::scoped_lock lock(_completed_tasks_mutex);
   return _completed_tasks.count(task);
 }

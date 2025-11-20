@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -18,13 +18,18 @@ class Executioner;
 class FEProblemBase;
 class DisplacedProblem;
 class MooseMesh;
-class NonlinearSystemBase;
+class SystemBase;
 class AuxiliarySystem;
 
 class SolveObject : public MooseObject, public PerfGraphInterface, public PostprocessorInterface
 {
 public:
   SolveObject(Executioner & ex);
+
+  /**
+   * Method that should be executed once, before any solve calls
+   */
+  virtual void initialSetup() {};
 
   /**
    * Solve routine provided by this object.
@@ -41,13 +46,13 @@ protected:
   /// Reference to FEProblem
   FEProblemBase & _problem;
   /// Displaced problem
-  std::shared_ptr<DisplacedProblem> _displaced_problem;
+  DisplacedProblem * _displaced_problem;
   /// Mesh
   MooseMesh & _mesh;
   /// Displaced mesh
   MooseMesh * _displaced_mesh;
-  /// Reference to nonlinear system base for faster access
-  NonlinearSystemBase & _nl;
+  /// Reference to a system for creating vectors as needed for the solve, etc.
+  SystemBase & _solver_sys;
   /// Reference to auxiliary system for faster access
   AuxiliarySystem & _aux;
   /// SolveObject wrapped by this solve object

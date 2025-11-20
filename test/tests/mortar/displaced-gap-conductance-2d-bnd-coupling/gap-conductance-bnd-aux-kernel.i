@@ -6,18 +6,18 @@
     # block 1: left
     # block 2: right
   []
-  [./primary]
+  [primary]
     input = file
     type = LowerDBlockFromSidesetGenerator
     sidesets = '2'
     new_block_id = '20'
-  [../]
-  [./secondary]
+  []
+  [secondary]
     input = primary
     type = LowerDBlockFromSidesetGenerator
     sidesets = '1'
     new_block_id = '10'
-  [../]
+  []
 []
 
 [AuxVariables]
@@ -37,12 +37,14 @@
     function = '.05 * t'
     variable = 'disp_x'
     block = '2'
+    execute_on = 'LINEAR TIMESTEP_BEGIN'
   []
   [function_y]
     type = FunctionAux
     function = '.05 * t'
     variable = 'disp_y'
     block = '2'
+    execute_on = 'LINEAR TIMESTEP_BEGIN'
   []
   [flux_modifier]
     type = StatefulAuxLowerD
@@ -54,40 +56,41 @@
 
 [Problem]
   kernel_coverage_check = false
+  use_hash_table_matrix_assembly = true
 []
 
 [Variables]
-  [./T]
+  [T]
     block = '1 2'
-  [../]
-  [./lambda]
+  []
+  [lambda]
     block = '10'
     family = LAGRANGE
     order = FIRST
-  [../]
+  []
 []
 
 [BCs]
-  [./left]
+  [left]
     type = DirichletBC
     variable = T
     boundary = '5'
     value = 0
-  [../]
-  [./right]
+  []
+  [right]
     type = DirichletBC
     variable = T
     boundary = '8'
     value = 1
-  [../]
+  []
 []
 
 [Kernels]
-  [./conduction]
+  [conduction]
     type = Diffusion
     variable = T
     block = '1 2'
-  [../]
+  []
 []
 
 [Debug]
@@ -95,7 +98,7 @@
 []
 
 [Constraints]
-  [./mortar]
+  [mortar]
     type = GapHeatConductanceAuxKernel
     primary_boundary = 2
     secondary_boundary = 1
@@ -106,7 +109,7 @@
     use_displaced_mesh = true
     auxkernel_variable = 'aux_var'
     correct_edge_dropping = true
-  [../]
+  []
 []
 
 [Materials]
@@ -120,10 +123,10 @@
 []
 
 [Preconditioning]
-  [./smp]
+  [smp]
     type = SMP
     full = true
-  [../]
+  []
 []
 
 [Executioner]

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -13,11 +13,11 @@
 InputParameters
 Component1D::validParams()
 {
-  InputParameters params = GeometricalComponent::validParams();
+  InputParameters params = GeneratedMeshComponent::validParams();
   return params;
 }
 
-Component1D::Component1D(const InputParameters & parameters) : GeometricalComponent(parameters) {}
+Component1D::Component1D(const InputParameters & parameters) : GeneratedMeshComponent(parameters) {}
 
 void
 Component1D::buildMeshNodes()
@@ -88,16 +88,14 @@ Component1D::buildMesh()
     if (i == 0)
     {
       Point pt = _position;
-      _connections[Component1DConnection::IN].push_back(
-          Connection(pt, elem->node_ptr(0), bc_id_inlet, -1));
+      _connections[Component1DConnection::IN].push_back(Connection(pt, elem, 0, bc_id_inlet, -1));
       boundary_info.add_side(elem, 0, bc_id_inlet);
       binfo.sideset_name(bc_id_inlet) = genName(name(), "in");
     }
     if (i == (_n_elem - 1))
     {
       Point pt = _position + _length * _dir;
-      _connections[Component1DConnection::OUT].push_back(
-          Connection(pt, elem->node_ptr(1), bc_id_outlet, 1));
+      _connections[Component1DConnection::OUT].push_back(Connection(pt, elem, 1, bc_id_outlet, 1));
       boundary_info.add_side(elem, 1, bc_id_outlet);
       binfo.sideset_name(bc_id_outlet) = genName(name(), "out");
     }
@@ -165,4 +163,26 @@ Component1D::getConnections(Component1DConnection::EEndType end_type) const
     return it->second;
   else
     mooseError(name(), ": Invalid end type (", end_type, ").");
+}
+
+std::string
+Component1D::sortBy() const
+{
+  // choose the dominant direction
+  std::string dominant_direction = "x";
+  const Real x_abs = std::abs(_dir(0));
+  const Real y_abs = std::abs(_dir(1));
+  const Real z_abs = std::abs(_dir(2));
+  Real max_value = x_abs;
+  if (y_abs > max_value)
+  {
+    dominant_direction = "y";
+    max_value = y_abs;
+  }
+  if (z_abs > max_value)
+  {
+    dominant_direction = "z";
+    max_value = z_abs;
+  }
+  return dominant_direction;
 }

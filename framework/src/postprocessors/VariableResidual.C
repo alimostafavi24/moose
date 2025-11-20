@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -34,9 +34,11 @@ VariableResidual::VariableResidual(const InputParameters & parameters)
   : GeneralPostprocessor(parameters),
     _var(_fe_problem.getVariable(_tid,
                                  getParam<VariableName>("variable"),
-                                 Moose::VarKindType::VAR_NONLINEAR,
+                                 Moose::VarKindType::VAR_SOLVER,
                                  Moose::VarFieldType::VAR_FIELD_STANDARD))
 {
+  mooseDeprecated(
+      "VariableResidual is deprecated. Please use DiscreteVariableResidualNorm instead.");
 }
 
 void
@@ -48,12 +50,12 @@ VariableResidual::initialize()
 void
 VariableResidual::execute()
 {
-  NonlinearSystemBase & nl = _fe_problem.getNonlinearSystemBase();
-  _var_residual = nl.system().calculate_norm(nl.RHS(), _var.number(), DISCRETE_L2);
+  NonlinearSystemBase & nl = _fe_problem.getNonlinearSystemBase(_sys.number());
+  _var_residual = nl.system().calculate_norm(nl.RHS(), _var.number(), libMesh::DISCRETE_L2);
 }
 
 PostprocessorValue
-VariableResidual::getValue()
+VariableResidual::getValue() const
 {
   return _var_residual;
 }

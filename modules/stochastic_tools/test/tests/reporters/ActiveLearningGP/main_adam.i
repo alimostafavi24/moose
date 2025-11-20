@@ -26,6 +26,7 @@
     distributions = 'k_dist q_dist Tinf_dist'
     flag_sample = 'conditional/flag_sample'
     seed = 5
+    num_samples = 20
     execute_on = PRE_MULTIAPP_SETUP
   []
 []
@@ -61,7 +62,7 @@
 
 [Reporters]
   [conditional]
-    type =  ActiveLearningGPDecision
+    type = ActiveLearningGPDecision
     sampler = mc
     parallel_type = ROOT
     execute_on = 'timestep_begin'
@@ -69,12 +70,12 @@
     inputs = 'inputs'
     gp_mean = 'gp_mean'
     gp_std = 'gp_std'
-    n_train = 7
+    n_train = 6
     al_gp = GP_al_trainer
     gp_evaluator = GP_eval
-    learning_function='Ufunction'
+    learning_function = 'Ufunction'
     learning_function_parameter = 349.345
-    learning_function_threshold=2.0
+    learning_function_threshold = 2.0
   []
 []
 
@@ -84,24 +85,22 @@
     covariance_function = 'covar'
     standardize_params = 'true'
     standardize_data = 'true'
-    tune_parameters = 'signal_variance length_factor'
-    tuning_algorithm = 'adam'
-    iter_adam = 1000
-    learning_rate_adam = 0.005
-    # show_optimization_details = true
+    tune_parameters = 'covar:signal_variance covar:length_factor'
+    num_iters = 1000
+    learning_rate = 0.005
   []
 []
 
 [Surrogates]
   [GP_eval]
-    type = GaussianProcess
+    type = GaussianProcessSurrogate
     trainer = GP_al_trainer
   []
 []
 
 [Covariance]
   [covar]
-    type= SquaredExponentialCovariance
+    type = SquaredExponentialCovariance
     signal_variance = 1.0
     noise_variance = 1e-4
     length_factor = '1.0 1.0 1.0'
@@ -110,7 +109,6 @@
 
 [Executioner]
   type = Transient
-  num_steps = 20
 []
 
 [Outputs]

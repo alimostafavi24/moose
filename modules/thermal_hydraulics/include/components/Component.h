@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -15,15 +15,20 @@
 #include "InputParameterWarehouse.h"
 #include "LoggingInterface.h"
 #include "NamingInterface.h"
+#include "ADFunctorInterface.h"
 
 class THMProblem;
 class THMMesh;
 class ThermalHydraulicsApp;
+class Convergence;
 
 /**
  * Base class for THM components
  */
-class Component : public THMObject, public LoggingInterface, public NamingInterface
+class Component : public THMObject,
+                  public LoggingInterface,
+                  public NamingInterface,
+                  public ADFunctorInterface
 {
 public:
   Component(const InputParameters & parameters);
@@ -31,13 +36,15 @@ public:
   /// Component setup status type
   enum EComponentSetupStatus
   {
-    CREATED,                  ///< only created
-    PRE_SETUP_MESH_COMPLETED, ///< preSetupMesh() executed
-    MESH_PREPARED,            ///< mesh set up
-    INITIALIZED_PRIMARY,      ///< mesh set up, called primary init
-    INITIALIZED_SECONDARY,    ///< mesh set up, called both inits
-    CHECKED                   ///< mesh set up, called both inits, checked
+    CREATED,               ///< only created
+    MESH_PREPARED,         ///< mesh set up
+    INITIALIZED_PRIMARY,   ///< mesh set up, called primary init
+    INITIALIZED_SECONDARY, ///< mesh set up, called both inits
+    CHECKED                ///< mesh set up, called both inits, checked
   };
+
+  /// Return a string for the setup status
+  std::string stringify(EComponentSetupStatus status) const;
 
   /**
    * Get the component name
@@ -61,6 +68,11 @@ public:
   THMMesh & mesh();
 
   /**
+   * Gets the THM problem
+   */
+  THMProblem & getTHMProblem() const;
+
+  /**
    * Test if a parameter exists in the object's input parameters
    * @param name The name of the parameter
    * @return true if the parameter exists, false otherwise
@@ -72,11 +84,6 @@ public:
    * Returns a list of names of components that this component depends upon
    */
   const std::vector<std::string> & getDependencies() const { return _dependencies; }
-
-  /**
-   * Wrapper function for \c preSetupMesh() that marks the function as being called
-   */
-  void executePreSetupMesh();
 
   /**
    * Wrapper function for \c init() that marks the function as being called
@@ -98,9 +105,19 @@ public:
    */
   void executeSetupMesh();
 
+  /**
+   * Adds relationship managers for the component
+   */
+  virtual void addRelationshipManagers(Moose::RelationshipManagerType /*input_rm_type*/) {}
+
   virtual void addVariables() {}
 
   virtual void addMooseObjects() {}
+
+  /**
+   * Gets the Component's nonlinear Convergence object if it has one
+   */
+  virtual Convergence * getNonlinearConvergence() const;
 
   /**
    * Return a reference to a component via a parameter name
@@ -137,18 +154,34 @@ public:
   bool hasComponentByName(const std::string & cname) const;
 
   /**
-   * Connect with control logic
+   * Connects a controllable parameter of the component to a controllable parameter of
+   * a constituent object.
+   *
+   * This version assumes that the component and object have the same control parameter name.
+   *
+   * @param[in] obj_params  Constituent object input parameters object
+   * @param[in] obj_name    Constituent object name
+   * @param[in] param       Controllable parameter name (same in both component and constituent
+   * object)
    */
-  void connectObject(const InputParameters & params,
-                     const std::string & mooseName,
-                     const std::string & name) const;
+  void connectObject(const InputParameters & obj_params,
+                     const std::string & obj_name,
+                     const std::string & param) const;
   /**
-   * Connect with control logic
+   * Connects a controllable parameter of the component to a controllable parameter of
+   * a constituent object.
+   *
+   * This is achieved by creating a "controllable parameter alias".
+   *
+   * @param[in] obj_params  Constituent object input parameters object
+   * @param[in] obj_name    Constituent object name
+   * @param[in] comp_param  Controllable component parameter
+   * @param[in] obj_param   Constituent object parameter
    */
-  void connectObject(const InputParameters & params,
-                     const std::string & mooseName,
-                     const std::string & name,
-                     const std::string & par_name) const;
+  void connectObject(const InputParameters & obj_params,
+                     const std::string & obj_name,
+                     const std::string & comp_param,
+                     const std::string & obj_param) const;
 
   /**
    * Makes a function controllable if it is constant
@@ -222,46 +255,6 @@ public:
    */
   void addDependency(const std::string & dependency);
 
-protected:
-  /**
-   * Gets the THM problem
-   */
-  THMProblem & getTHMProblem() const;
-
-  /**
-   * Performs any post-constructor, pre-mesh-setup setup
-   */
-  virtual void preSetupMesh() {}
-
-  /**
-   * Initializes the component
-   *
-   * The reason this function exists (as opposed to just having everything in
-   * the constructor) is because some initialization depends on all components
-   * existing, since many components couple to other components. Therefore,
-   * when deciding whether code should go into the constructor or this function,
-   * one should use the following reasoning: if an operation does not require
-   * the existence of other components, then put that operation in the
-   * constructor; otherwise, put it in this function.
-   */
-  virtual void init() {}
-
-  /**
-   * Perform secondary initialization, which relies on init() being called
-   * for all components.
-   */
-  virtual void initSecondary() {}
-
-  /**
-   * Check the component integrity
-   */
-  virtual void check() const {}
-
-  /**
-   * Performs mesh setup such as creating mesh or naming mesh sets
-   */
-  virtual void setupMesh() {}
-
   /**
    * Gets an enum parameter
    *
@@ -271,9 +264,39 @@ protected:
    *
    * @tparam    T       enum type
    * @param[in] param   name of the MooseEnum parameter
+   * @param[in] log_error  If true, log an error if the valid is invalid
    */
   template <typename T>
-  T getEnumParam(const std::string & param) const;
+  T getEnumParam(const std::string & param, bool log_error = true) const;
+
+  /**
+   * Whether the problem is transient
+   */
+  bool problemIsTransient() const { return getTHMProblem().isTransient(); }
+
+  /**
+   * Gets the node IDs corresponding to this component
+   */
+  const std::vector<dof_id_type> & getNodeIDs() const;
+
+  /**
+   * Gets the element IDs corresponding to this component
+   */
+  const std::vector<dof_id_type> & getElementIDs() const;
+
+  /**
+   * Gets the subdomain names for this component
+   *
+   * @return vector of subdomain names for this component
+   */
+  virtual const std::vector<SubdomainName> & getSubdomainNames() const;
+
+  /**
+   * Gets the coordinate system types for this component
+   *
+   * @return vector of coordinate system types for this component
+   */
+  virtual const std::vector<Moose::CoordinateSystemType> & getCoordSysTypes() const;
 
   /**
    * Runtime check to make sure that a parameter of specified type exists in the component's input
@@ -378,6 +401,62 @@ protected:
   void checkMutuallyExclusiveParameters(const std::vector<std::string> & params,
                                         bool need_one_specified = true) const;
 
+protected:
+  /**
+   * Initializes the component
+   *
+   * The reason this function exists (as opposed to just having everything in
+   * the constructor) is because some initialization depends on all components
+   * existing, since many components couple to other components. Therefore,
+   * when deciding whether code should go into the constructor or this function,
+   * one should use the following reasoning: if an operation does not require
+   * the existence of other components, then put that operation in the
+   * constructor; otherwise, put it in this function.
+   */
+  virtual void init() {}
+
+  /**
+   * Perform secondary initialization, which relies on init() being called
+   * for all components.
+   */
+  virtual void initSecondary() {}
+
+  /**
+   * Check the component integrity
+   */
+  virtual void check() const {}
+
+  /**
+   * Performs mesh setup such as creating mesh or naming mesh sets
+   */
+  virtual void setupMesh() {}
+
+  /**
+   * Method to add a relationship manager for the objects being added to the system. Relationship
+   * managers have to be added relatively early. In many cases before the Action::act() method
+   * is called.
+   *
+   * This method was copied from Action.
+   *
+   * @param moose_object_pars The MooseObject to inspect for RelationshipManagers to add
+   */
+  void addRelationshipManagersFromParameters(const InputParameters & moose_object_pars);
+
+  Node * addNode(const Point & pt);
+  Elem * addNodeElement(dof_id_type node);
+
+  /**
+   * Sets the next subdomain ID, name, and coordinate system
+   *
+   * @param[in] subdomain_id  subdomain index
+   * @param[in] subdomain_name  name of the new subdomain
+   * @param[in] coord_system  type of coordinate system
+   */
+  virtual void
+  setSubdomainInfo(SubdomainID subdomain_id,
+                   const std::string & subdomain_name,
+                   const Moose::CoordinateSystemType & coord_system = Moose::COORD_XYZ);
+
   /// Pointer to a parent component (used in composed components)
   Component * _parent;
 
@@ -395,7 +474,39 @@ protected:
   /// TODO: make _mesh private (applications need to switch to getters to avoid breaking)
   THMMesh & _mesh;
 
+  /// Node IDs of this component
+  std::vector<dof_id_type> _node_ids;
+  /// Element IDs of this component
+  std::vector<dof_id_type> _elem_ids;
+
+  /// List of subdomain IDs this components owns
+  std::vector<SubdomainID> _subdomain_ids;
+  /// List of subdomain names this components owns
+  std::vector<SubdomainName> _subdomain_names;
+  /// List of coordinate system for each subdomain
+  std::vector<Moose::CoordinateSystemType> _coord_sys;
+
 private:
+  /**
+   * Method for adding a single relationship manager
+   *
+   * This method was copied from Action.
+   *
+   * @param moose_object_pars The parameters of the MooseObject that requested the RM
+   * @param rm_name The class type of the RM, e.g. ElementSideNeighborLayers
+   * @param rm_type The RelationshipManagerType, e.g. geometric, algebraic, coupling
+   * @param rm_input_parameter_func The RM callback function, typically a lambda defined in the
+   *                                requesting MooseObject's validParams function
+   * @param sys_type A RMSystemType that can be used to limit the systems and consequent dof_maps
+   *                 that the RM can be attached to
+   */
+  void
+  addRelationshipManager(const InputParameters & moose_object_pars,
+                         std::string rm_name,
+                         Moose::RelationshipManagerType rm_type,
+                         Moose::RelationshipManagerInputParameterCallback rm_input_parameter_func,
+                         Moose::RMSystemType sys_type = Moose::RMSystemType::NONE);
+
   /// Component setup status
   mutable EComponentSetupStatus _component_setup_status;
 
@@ -448,11 +559,11 @@ Component::hasComponentByName(const std::string & comp_name) const
 
 template <typename T>
 T
-Component::getEnumParam(const std::string & param) const
+Component::getEnumParam(const std::string & param, bool log_error) const
 {
   const MooseEnum & moose_enum = getParam<MooseEnum>(param);
   const T value = THM::stringToEnum<T>(moose_enum);
-  if (value < 0)
+  if (log_error && static_cast<int>(value) < 0) // cast necessary for scoped enums
   {
     // Get the keys from the MooseEnum. Unfortunately, this returns a list of
     // *all* keys, including the invalid key that was supplied. Thus, that key

@@ -1,5 +1,14 @@
+//* This file is part of the MOOSE framework
+//* https://mooseframework.inl.gov
+//*
+//* All rights reserved, see COPYRIGHT for full restrictions
+//* https://github.com/idaholab/moose/blob/master/COPYRIGHT
+//*
+//* Licensed under LGPL 2.1, please see LICENSE for details
+//* https://www.gnu.org/licenses/lgpl-2.1.html
+
 // * This file is part of the MOOSE framework
-// * https://www.mooseframework.org
+// * https://mooseframework.inl.gov
 // *
 // * All rights reserved, see COPYRIGHT for full restrictions
 // * https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -20,9 +29,11 @@ namespace FluidPropertiesUtils
  * @param[in] x constant first argument of the f(x, z) term
  * @param[in] y constant which should be equal to f(x, z) with a converged z
  * @param[in] z_initial_guess initial guess for return variables
- * @param[in] tolerance criterion for relative or absolute (if y is sufficently close to zero)
+ * @param[in] tolerance criterion for relative or absolute (if y is sufficiently close to zero)
  * convergence checking
  * @param[in] function two-variable function returning both values and derivatives as references
+ * @param[in] caller_name name of the fluid properties appended to name of the routine calling the
+ * method
  * @param[in] max_its the maximum number of iterations for Newton's method
  * @return a pair in which the first member is the value z such that f(x, z) = y and the second
  * member is dy/dz
@@ -34,21 +45,24 @@ NewtonSolve(const T & x,
             const Real z_initial_guess,
             const Real tolerance,
             const Functor & func,
+            const std::string & caller_name,
             const unsigned int max_its = 100)
 {
   // R represents residual
 
   std::function<bool(const T &, const T &)> abs_tol_check =
       [tolerance](const T & R, const T & /*y*/)
-  { return MetaPhysicL::raw_value(std::abs(R)) < tolerance; };
+  { return std::abs(MetaPhysicL::raw_value(R)) < tolerance; };
   std::function<bool(const T &, const T &)> rel_tol_check = [tolerance](const T & R, const T & y)
-  { return MetaPhysicL::raw_value(std::abs(R / y)) < tolerance; };
+  { return std::abs(MetaPhysicL::raw_value(R / y)) < tolerance; };
   auto convergence_check = MooseUtils::absoluteFuzzyEqual(MetaPhysicL::raw_value(y), 0, tolerance)
                                ? abs_tol_check
                                : rel_tol_check;
 
   T z = z_initial_guess, R, new_y, dy_dx, dy_dz;
   unsigned int iteration = 0;
+
+  using std::isnan;
 
   do
   {
@@ -67,14 +81,14 @@ NewtonSolve(const T & x,
     // Check the accuracy of the Jacobian
     auto J_differenced = (perturbed_y - new_y) / (1e-8 * z);
     if (!MooseUtils::relativeFuzzyEqual(J_differenced, dy_dz, 1e-2))
-      mooseDoOnce(mooseWarning("Bad Jacobian in NewtonSolve"));
+      mooseDoOnce(mooseWarning(caller_name + ": Bad Jacobian in NewtonSolve"));
 #endif
 
     z += -(R / dy_dz);
 
     // Check for NaNs
-    if (std::isnan(z))
-      mooseException("NaN detected in Newton solve");
+    if (isnan(z))
+      mooseException(caller_name + ": NaN detected in Newton solve");
 
     if (converged)
       break;
@@ -82,8 +96,10 @@ NewtonSolve(const T & x,
 
   // Check for divergence or slow convergence of Newton's method
   if (iteration >= max_its)
-    mooseException(
-        "Newton solve convergence failed: maximum number of iterations, ", max_its, ", exceeded");
+    mooseException(caller_name +
+                       ": Newton solve convergence failed: maximum number of iterations, ",
+                   max_its,
+                   ", exceeded");
 
   return {z, dy_dz};
 }
@@ -127,11 +143,13 @@ NewtonSolve2D(const T & f,
   // R represents a residual equal to y - y_in
   auto convergence_check = [&targets, &tolerances](const auto & minus_R)
   {
+    using std::abs;
+
     for (const auto i : index_range(minus_R))
     {
-      const auto error = std::abs(MooseUtils::absoluteFuzzyEqual(targets(i), 0, tolerances(i))
-                                      ? minus_R(i)
-                                      : minus_R(i) / targets(i));
+      const auto error = abs(MooseUtils::absoluteFuzzyEqual(targets(i), 0, tolerances(i))
+                                 ? minus_R(i)
+                                 : minus_R(i) / targets(i));
       if (error >= tolerances(i))
         return false;
     }
@@ -156,6 +174,8 @@ NewtonSolve2D(const T & f,
     y_final = u(1);
   };
 
+  using std::isnan, std::max, std::abs;
+
   do
   {
     for (const auto i : make_range(system_size))
@@ -172,7 +192,7 @@ NewtonSolve2D(const T & f,
     // Check for NaNs before proceeding to system solve. We may simultaneously not have NaNs in z
     // but have NaNs in the function evaluation
     for (const auto i : make_range(system_size))
-      if (std::isnan(minus_R(i)))
+      if (isnan(minus_R(i)))
       {
         assign_solution();
         mooseException("NaN detected in Newton solve");
@@ -181,7 +201,7 @@ NewtonSolve2D(const T & f,
     // Do some Jacobi (rowmax) preconditioning
     for (const auto i : make_range(system_size))
     {
-      const auto rowmax = std::max(std::abs(J(i, 0)), std::abs(J(i, 1)));
+      const auto rowmax = max(abs(J(i, 0)), abs(J(i, 1)));
       for (const auto j : make_range(system_size))
         J(i, j) /= rowmax;
       minus_R(i) /= rowmax;
@@ -208,7 +228,7 @@ NewtonSolve2D(const T & f,
 
     // Check for NaNs
     for (const auto i : make_range(system_size))
-      if (std::isnan(u(i)))
+      if (isnan(u(i)))
       {
         assign_solution();
         mooseException("NaN detected in Newton solve");

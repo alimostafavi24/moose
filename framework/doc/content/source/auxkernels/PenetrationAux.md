@@ -1,6 +1,9 @@
 # PenetrationAux
 
-Auxililary Kernel for computing several geometry related quantities between two different bodies in or near contact.
+Auxiliary Kernel for computing several geometry related quantities between two different bodies in or near contact.
+
+See [GeometricSearchData.md] for more information on the treatment of
+geometric pairing between boundaries in or near contact.
 
 ## Gap offset parameters
 

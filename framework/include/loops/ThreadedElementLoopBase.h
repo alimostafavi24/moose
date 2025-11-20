@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -15,6 +15,9 @@
 #include "MooseException.h"
 #include "libmesh/libmesh_exceptions.h"
 #include "libmesh/elem.h"
+
+// C++
+#include <cstring> // for "Jacobian" exception test
 
 /**
  * Base class for assembly-like calculations.
@@ -113,6 +116,14 @@ public:
   virtual void onInternalSide(const Elem * elem, unsigned int side);
 
   /**
+   * Called when iterating over external sides (no side neighbor)
+   *
+   * @param elem - Element we are on
+   * @param side - local side number of the element 'elem'
+   */
+  virtual void onExternalSide(const Elem * elem, unsigned int side);
+
+  /**
    * Called when doing interface assembling
    *
    * @param elem - Element we are on
@@ -141,7 +152,7 @@ public:
    * Called if a MooseException is caught anywhere during the computation.
    * The single input parameter taken is a MooseException object.
    */
-  virtual void caughtMooseException(MooseException &){};
+  virtual void caughtMooseException(MooseException &) {};
 
   /**
    * Whether or not the loop should continue.
@@ -166,7 +177,24 @@ protected:
   /// The subdomain for the last neighbor
   SubdomainID _old_neighbor_subdomain;
 
-private:
+  /// Print information about the loop ordering
+  virtual void printGeneralExecutionInformation() const {}
+
+  /// Print information about the particular ordering of objects on each block
+  virtual void printBlockExecutionInformation() const {}
+
+  /// Print information about the particular ordering of objects on each boundary
+  virtual void printBoundaryExecutionInformation(const unsigned int /*bid*/) const {}
+
+  /// Keep track of which blocks were visited
+  mutable std::set<SubdomainID> _blocks_exec_printed;
+
+  /// Keep track of which boundaries were visited
+  mutable std::set<BoundaryID> _boundaries_exec_printed;
+
+  /// Resets the set of blocks and boundaries visited
+  void resetExecPrintedSets() const;
+
   /**
    * Whether to compute the internal side for the provided element-neighbor pair. Typically this
    * will return true if the element id is less than the neighbor id when the elements are equal
@@ -205,6 +233,7 @@ ThreadedElementLoopBase<RangeType>::operator()(const RangeType & range, bool byp
       _tid = bypass_threading ? 0 : puid.id;
 
       pre();
+      printGeneralExecutionInformation();
 
       _subdomain = Moose::INVALID_BLOCK_ID;
       _neighbor_subdomain = Moose::INVALID_BLOCK_ID;
@@ -221,12 +250,15 @@ ThreadedElementLoopBase<RangeType>::operator()(const RangeType & range, bool byp
         _old_subdomain = _subdomain;
         _subdomain = elem->subdomain_id();
         if (_subdomain != _old_subdomain)
+        {
           subdomainChanged();
+          printBlockExecutionInformation();
+        }
 
         onElement(elem);
 
-        if (elem->subdomain_id() == Moose::INTERNAL_SIDE_LOWERD_ID ||
-            elem->subdomain_id() == Moose::BOUNDARY_SIDE_LOWERD_ID)
+        if (_mesh.interiorLowerDBlocks().count(elem->subdomain_id()) > 0 ||
+            _mesh.boundaryLowerDBlocks().count(elem->subdomain_id()) > 0)
         {
           postElement(elem);
           continue;
@@ -243,6 +275,7 @@ ThreadedElementLoopBase<RangeType>::operator()(const RangeType & range, bool byp
                  ++it)
             {
               preBoundary(elem, side, *it, lower_d_elem);
+              printBoundaryExecutionInformation(*it);
               onBoundary(elem, side, *it, lower_d_elem);
             }
 
@@ -267,20 +300,30 @@ ThreadedElementLoopBase<RangeType>::operator()(const RangeType & range, bool byp
 
             postInternalSide(elem, side);
           }
+          else
+            onExternalSide(elem, side);
         } // sides
 
         postElement(elem);
       } // range
 
       post();
-    }
-    catch (libMesh::LogicError & e)
-    {
-      mooseException("We caught a libMesh error in ThreadedElementLoopBase:", e.what());
+      resetExecPrintedSets();
     }
     catch (MetaPhysicL::LogicError & e)
     {
       moose::translateMetaPhysicLError(e);
+    }
+    catch (std::exception & e)
+    {
+      // Continue if we find a libMesh degenerate map exception, but
+      // just re-throw for any real error
+      if (!strstr(e.what(), "Jacobian") && !strstr(e.what(), "singular") &&
+          !strstr(e.what(), "det != 0"))
+        throw; // not "throw e;" - that destroys type info!
+
+      mooseException("We caught a libMesh degeneracy exception in ThreadedElementLoopBase:\n",
+                     e.what());
     }
   }
   catch (MooseException & e)
@@ -357,6 +400,12 @@ ThreadedElementLoopBase<RangeType>::onInternalSide(const Elem * /*elem*/, unsign
 
 template <typename RangeType>
 void
+ThreadedElementLoopBase<RangeType>::onExternalSide(const Elem * /*elem*/, unsigned int /*side*/)
+{
+}
+
+template <typename RangeType>
+void
 ThreadedElementLoopBase<RangeType>::onInterface(const Elem * /*elem*/,
                                                 unsigned int /*side*/,
                                                 BoundaryID /*bnd_id*/)
@@ -380,14 +429,30 @@ bool
 ThreadedElementLoopBase<RangeType>::shouldComputeInternalSide(const Elem & elem,
                                                               const Elem & neighbor) const
 {
-  const dof_id_type elem_id = elem.id(), neighbor_id = neighbor.id();
+  auto level = [this](const auto & elem_arg)
+  {
+    if (_mesh.doingPRefinement())
+      return elem_arg.p_level();
+    else
+      return elem_arg.level();
+  };
+  const auto elem_id = elem.id(), neighbor_id = neighbor.id();
+  const auto elem_level = level(elem), neighbor_level = level(neighbor);
 
   // When looping over elements and then sides, we need to make sure that we do not duplicate
   // effort, e.g. if a face is shared by element 1 and element 2, then we do not want to do compute
   // work both when we are visiting element 1 *and* then later when visiting element 2. Our rule is
-  // to only compute when we are visting the element that has the lower element id when element and
+  // to only compute when we are visiting the element that has the lower element id when element and
   // neighbor are of the same adaptivity level, and then if they are not of the same level, then
   // we only compute when we are visiting the finer element
-  return (neighbor.active() && (neighbor.level() == elem.level()) && (elem_id < neighbor_id)) ||
-         (neighbor.level() < elem.level());
+  return (neighbor.active() && (neighbor_level == elem_level) && (elem_id < neighbor_id)) ||
+         (neighbor_level < elem_level);
+}
+
+template <typename RangeType>
+void
+ThreadedElementLoopBase<RangeType>::resetExecPrintedSets() const
+{
+  _blocks_exec_printed.clear();
+  _boundaries_exec_printed.clear();
 }

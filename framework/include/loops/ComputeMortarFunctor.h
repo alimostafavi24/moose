@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -41,10 +41,15 @@ public:
       bool displaced,
       Assembly & assembly);
 
+  /// Setup step for materials that needs to be re-done if subdomains change
+  void setupMortarMaterials();
+
   /**
    * Loops over the mortar segment mesh and computes the residual/Jacobian
    */
-  void operator()(Moose::ComputeType compute_type);
+  void operator()(Moose::ComputeType compute_type,
+                  const std::set<TagID> & vector_tag_ids,
+                  const std::set<TagID> & matrix_tag_ids);
 
 private:
   /// The mortar constraints to loop over when on each element. These must be

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -19,11 +19,13 @@ DiscreteNucleationInserterBase::validParams()
 
 DiscreteNucleationInserterBase::DiscreteNucleationInserterBase(const InputParameters & parameters)
   : ElementUserObject(parameters),
-    _global_nucleus_list(declareRestartableData("global_nucleus_list", NucleusList(0))),
+    _global_nucleus_list(declareRestartableData<NucleusList>("global_nucleus_list", 0)),
     _changes_made(0, 0),
     _update_required(_app.isRecovering() || _app.isRestarting())
 {
-  setRandomResetFrequency(EXEC_TIMESTEP_END);
+  // Even though this object executes on timestep_end, registering on timestep_begin will allow
+  // generators to be restored if a timestep is repeated.
+  setRandomResetFrequency(EXEC_TIMESTEP_BEGIN);
 }
 
 template <>

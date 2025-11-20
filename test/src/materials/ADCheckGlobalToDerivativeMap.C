@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -46,7 +46,7 @@ ADCheckGlobalToDerivativeMap::computeProperties()
 #ifndef NDEBUG
   if (_fe_problem.currentlyComputingJacobian())
   {
-    const auto & moose_nl_system = _fe_problem.getNonlinearSystemBase();
+    const auto & moose_nl_system = _fe_problem.getNonlinearSystemBase(0);
 
     const auto global_index_to_deriv_map = Moose::globalDofIndexToDerivative(
         _mat_prop, moose_nl_system, Moose::ElementType::Element, _tid);
@@ -100,5 +100,6 @@ ADCheckGlobalToDerivativeMap::computeProperties()
 void
 ADCheckGlobalToDerivativeMap::computeQpProperties()
 {
-  _mat_prop[_qp] = 1. + std::pow(_u[_qp], 2) * std::pow(_v[_qp], 3);
+  using std::pow;
+  _mat_prop[_qp] = 1. + pow(_u[_qp], 2) * pow(_v[_qp], 3);
 }

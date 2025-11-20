@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -28,12 +28,16 @@
 #include "FEProblem.h"
 #include "Assembly.h"
 #include "MooseUtils.h"
+#include "MaterialPropertyStorage.h"
 
 #include "libmesh/mesh_communication.h"
 #include "libmesh/partitioner.h"
 
 XFEM::XFEM(const InputParameters & params)
-  : XFEMInterface(params), _efa_mesh(Moose::out), _debug_output_level(1)
+  : XFEMInterface(params),
+    _efa_mesh(Moose::out),
+    _debug_output_level(1),
+    _min_weight_multiplier(0.0)
 {
 #ifndef LIBMESH_ENABLE_UNIQUE_ID
   mooseError("MOOSE requires unique ids to be enabled in libmesh (configure with "
@@ -342,6 +346,7 @@ XFEM::buildEFAMesh()
     std::vector<unsigned int> quad;
     for (unsigned int i = 0; i < elem->n_nodes(); ++i)
       quad.push_back(elem->node_id(i));
+
     if (_mesh->mesh_dimension() == 2)
       _efa_mesh.add2DElement(quad, elem->id());
     else if (_mesh->mesh_dimension() == 3)
@@ -603,8 +608,8 @@ XFEM::markCutEdgesByState(Real time)
     unsigned int nsides = CEMElem->numEdges();
     unsigned int orig_cut_side_id = std::numeric_limits<unsigned int>::max();
     Real orig_cut_distance = -1.0;
-    EFANode * orig_node = NULL;
-    EFAEdge * orig_edge = NULL;
+    EFANode * orig_node = nullptr;
+    EFAEdge * orig_edge = nullptr;
 
     // crack tip origin coordinates and direction
     Point crack_tip_origin(0, 0, 0);
@@ -947,7 +952,7 @@ XFEM::healMesh()
             if (!xfce->isPointPhysical(*e1node) &&
                 e1node != e2node) // This would happen at the crack tip
             {
-              elem1->set_node(in) = e2node;
+              elem1->set_node(in, e2node);
               nodes_to_delete.insert(e1node);
             }
             else if (e1node != e2node)
@@ -998,7 +1003,7 @@ XFEM::healMesh()
               if (!xfce->isPointPhysical(*elem1->node_ptr(in)) &&
                   e1node_displaced != e2node_displaced)
               {
-                elem1_displaced->set_node(in) = e2node_displaced;
+                elem1_displaced->set_node(in, e2node_displaced);
                 nodes_to_delete_displaced.insert(e1node_displaced);
               }
               else if (e1node_displaced != e2node_displaced)
@@ -1014,8 +1019,8 @@ XFEM::healMesh()
         }
 
         // remove the property storage of deleted element/side
-        (*_material_data)[0]->eraseProperty(elem2);
-        (*_bnd_material_data)[0]->eraseProperty(elem2);
+        _material_data[0]->eraseProperty(elem2);
+        _bnd_material_data[0]->eraseProperty(elem2);
 
         cutelems_to_delete.insert(elem2->unique_id());
         elem2->nullify_neighbors();
@@ -1110,7 +1115,7 @@ XFEM::cutMeshWithEFA(const std::vector<std::shared_ptr<NonlinearSystemBase>> & n
 
   // Copy the current geometric cut element info (from last time) into the
   // _old_geom_cut_elems.
-  _old_geom_cut_elems = _geom_cut_elems;
+  _old_geom_cut_elems.swap(_geom_cut_elems);
   _geom_cut_elems.clear();
 
   _efa_mesh.updatePhysicalLinksAndFragments();
@@ -1161,7 +1166,7 @@ XFEM::cutMeshWithEFA(const std::vector<std::shared_ptr<NonlinearSystemBase>> & n
     unsigned int parent_id = new_nodes[i]->parent()->id();
 
     Node * parent_node = _mesh->node_ptr(parent_id);
-    Node * new_node = Node::build(*parent_node, _mesh->n_nodes()).release();
+    Node * new_node = Node::build(*parent_node, _mesh->max_node_id()).release();
     _mesh->add_node(new_node);
 
     new_nodes_to_parents[new_node] = parent_node;
@@ -1173,7 +1178,7 @@ XFEM::cutMeshWithEFA(const std::vector<std::shared_ptr<NonlinearSystemBase>> & n
     if (_displaced_mesh)
     {
       const Node * parent_node2 = _displaced_mesh->node_ptr(parent_id);
-      Node * new_node2 = Node::build(*parent_node2, _displaced_mesh->n_nodes()).release();
+      Node * new_node2 = Node::build(*parent_node2, _displaced_mesh->max_node_id()).release();
       _displaced_mesh->add_node(new_node2);
 
       new_node2->set_n_systems(parent_node2->n_systems());
@@ -1209,8 +1214,8 @@ XFEM::cutMeshWithEFA(const std::vector<std::shared_ptr<NonlinearSystemBase>> & n
     if (new_elements[i]->getParent()->numChildren() > 1)
       temporary_parent_children_map[parent_elem->id()].push_back(libmesh_elem);
 
-    Elem * parent_elem2 = NULL;
-    Elem * libmesh_elem2 = NULL;
+    Elem * parent_elem2 = nullptr;
+    Elem * libmesh_elem2 = nullptr;
     if (_displaced_mesh)
     {
       parent_elem2 = _displaced_mesh->elem_ptr(parent_id);
@@ -1242,7 +1247,7 @@ XFEM::cutMeshWithEFA(const std::vector<std::shared_ptr<NonlinearSystemBase>> & n
       if (libmesh_node->processor_id() == DofObject::invalid_processor_id)
         libmesh_node->processor_id() = parent_elem->processor_id();
 
-      libmesh_elem->set_node(j) = libmesh_node;
+      libmesh_elem->set_node(j, libmesh_node);
 
       // Store solution for all nodes affected by XFEM (even existing nodes)
       if (parent_elem->is_semilocal(_mesh->processor_id()))
@@ -1286,7 +1291,7 @@ XFEM::cutMeshWithEFA(const std::vector<std::shared_ptr<NonlinearSystemBase>> & n
         if (libmesh_node->processor_id() == DofObject::invalid_processor_id)
           libmesh_node->processor_id() = parent_elem2->processor_id();
 
-        libmesh_elem2->set_node(j) = libmesh_node;
+        libmesh_elem2->set_node(j, libmesh_node);
 
         parent_node = parent_elem2->node_ptr(j);
         _displaced_mesh->get_boundary_info().boundary_ids(parent_node, parent_boundary_ids);
@@ -1315,7 +1320,7 @@ XFEM::cutMeshWithEFA(const std::vector<std::shared_ptr<NonlinearSystemBase>> & n
     if (_debug_output_level > 1)
       _console << "XFEM added new element: " << libmesh_elem->id() << std::endl;
 
-    XFEMCutElem * xfce = NULL;
+    XFEMCutElem * xfce = nullptr;
     if (_mesh->mesh_dimension() == 2)
     {
       EFAElement2D * new_efa_elem2d = dynamic_cast<EFAElement2D *>(new_elements[i]);
@@ -1323,7 +1328,7 @@ XFEM::cutMeshWithEFA(const std::vector<std::shared_ptr<NonlinearSystemBase>> & n
         mooseError("EFAelem is not of EFAelement2D type");
       xfce = new XFEMCutElem2D(libmesh_elem,
                                new_efa_elem2d,
-                               _fe_problem->assembly(0).qRule()->n_points(),
+                               _fe_problem->assembly(0, /*nl_sys_num=*/0).qRule()->n_points(),
                                libmesh_elem->n_sides());
     }
     else if (_mesh->mesh_dimension() == 3)
@@ -1333,7 +1338,7 @@ XFEM::cutMeshWithEFA(const std::vector<std::shared_ptr<NonlinearSystemBase>> & n
         mooseError("EFAelem is not of EFAelement3D type");
       xfce = new XFEMCutElem3D(libmesh_elem,
                                new_efa_elem3d,
-                               _fe_problem->assembly(0).qRule()->n_points(),
+                               _fe_problem->assembly(0, /*nl_sys_num=*/0).qRule()->n_points(),
                                libmesh_elem->n_sides());
     }
     _cut_elem_map.insert(std::pair<unique_id_type, XFEMCutElem *>(libmesh_elem->unique_id(), xfce));
@@ -1385,17 +1390,20 @@ XFEM::cutMeshWithEFA(const std::vector<std::shared_ptr<NonlinearSystemBase>> & n
     // TODO: Also need to copy neighbor material data
     if (parent_elem->processor_id() == _mesh->processor_id())
     {
-      (*_material_data)[0]->copy(*libmesh_elem, *parent_elem, 0);
-      for (unsigned int side = 0; side < parent_elem->n_sides(); ++side)
-      {
-        _mesh->get_boundary_info().boundary_ids(parent_elem, side, parent_boundary_ids);
-        std::vector<boundary_id_type>::iterator it_bd = parent_boundary_ids.begin();
-        for (; it_bd != parent_boundary_ids.end(); ++it_bd)
+      if (_material_data[0]->getMaterialPropertyStorage().hasStatefulProperties())
+        _material_data[0]->copy(*libmesh_elem, *parent_elem, 0);
+
+      if (_bnd_material_data[0]->getMaterialPropertyStorage().hasStatefulProperties())
+        for (unsigned int side = 0; side < parent_elem->n_sides(); ++side)
         {
-          if (_fe_problem->needBoundaryMaterialOnSide(*it_bd, 0))
-            (*_bnd_material_data)[0]->copy(*libmesh_elem, *parent_elem, side);
+          _mesh->get_boundary_info().boundary_ids(parent_elem, side, parent_boundary_ids);
+          std::vector<boundary_id_type>::iterator it_bd = parent_boundary_ids.begin();
+          for (; it_bd != parent_boundary_ids.end(); ++it_bd)
+          {
+            if (_fe_problem->needBoundaryMaterialOnSide(*it_bd, 0))
+              _bnd_material_data[0]->copy(*libmesh_elem, *parent_elem, side);
+          }
         }
-      }
 
       // Store the current information about the geometrically cut element, and load cached material
       // properties into the new child element, if any.
@@ -1453,8 +1461,8 @@ XFEM::cutMeshWithEFA(const std::vector<std::shared_ptr<NonlinearSystemBase>> & n
     }
 
     // remove the property storage of deleted element/side
-    (*_material_data)[0]->eraseProperty(elem_to_delete);
-    (*_bnd_material_data)[0]->eraseProperty(elem_to_delete);
+    _material_data[0]->eraseProperty(elem_to_delete);
+    _bnd_material_data[0]->eraseProperty(elem_to_delete);
 
     elem_to_delete->nullify_neighbors();
     _mesh->get_boundary_info().remove(elem_to_delete);
@@ -1700,24 +1708,23 @@ XFEM::isElemAtCrackTip(const Elem * elem) const
 bool
 XFEM::isElemCut(const Elem * elem, XFEMCutElem *& xfce) const
 {
-  xfce = NULL;
-  bool is_cut = false;
-  std::map<unique_id_type, XFEMCutElem *>::const_iterator it;
-  it = _cut_elem_map.find(elem->unique_id());
+  const auto it = _cut_elem_map.find(elem->unique_id());
   if (it != _cut_elem_map.end())
   {
     xfce = it->second;
     const EFAElement * EFAelem = xfce->getEFAElement();
     if (EFAelem->isPartial()) // exclude the full crack tip elements
-      is_cut = true;
+      return true;
   }
-  return is_cut;
+
+  xfce = nullptr;
+  return false;
 }
 
 bool
 XFEM::isElemCut(const Elem * elem) const
 {
-  XFEMCutElem * xfce = NULL;
+  XFEMCutElem * xfce;
   return isElemCut(elem, xfce);
 }
 
@@ -1835,6 +1842,12 @@ XFEM::setDebugOutputLevel(unsigned int debug_output_level)
   _debug_output_level = debug_output_level;
 }
 
+void
+XFEM::setMinWeightMultiplier(Real min_weight_multiplier)
+{
+  _min_weight_multiplier = min_weight_multiplier;
+}
+
 bool
 XFEM::getXFEMWeights(MooseArray<Real> & weights,
                      const Elem * elem,
@@ -1842,12 +1855,24 @@ XFEM::getXFEMWeights(MooseArray<Real> & weights,
                      const MooseArray<Point> & q_points)
 {
   bool have_weights = false;
-  XFEMCutElem * xfce = NULL;
+  XFEMCutElem * xfce = nullptr;
   if (isElemCut(elem, xfce))
   {
-    mooseAssert(xfce != NULL, "Must have valid XFEMCutElem object here");
+    mooseAssert(xfce != nullptr, "Must have valid XFEMCutElem object here");
     xfce->getWeightMultipliers(weights, qrule, getXFEMQRule(), q_points);
     have_weights = true;
+
+    Real ave_weight_multiplier = 0;
+    for (unsigned int i = 0; i < weights.size(); ++i)
+      ave_weight_multiplier += weights[i];
+    ave_weight_multiplier /= weights.size();
+
+    if (ave_weight_multiplier < _min_weight_multiplier)
+    {
+      const Real amount_to_add = _min_weight_multiplier - ave_weight_multiplier;
+      for (unsigned int i = 0; i < weights.size(); ++i)
+        weights[i] += amount_to_add;
+    }
   }
   return have_weights;
 }
@@ -1860,10 +1885,10 @@ XFEM::getXFEMFaceWeights(MooseArray<Real> & weights,
                          unsigned int side)
 {
   bool have_weights = false;
-  XFEMCutElem * xfce = NULL;
+  XFEMCutElem * xfce = nullptr;
   if (isElemCut(elem, xfce))
   {
-    mooseAssert(xfce != NULL, "Must have valid XFEMCutElem object here");
+    mooseAssert(xfce != nullptr, "Must have valid XFEMCutElem object here");
     xfce->getFaceWeightMultipliers(weights, qrule, getXFEMQRule(), q_points, side);
     have_weights = true;
   }
@@ -2159,33 +2184,20 @@ XFEM::getGeometricCutForElem(const Elem * elem) const
   return nullptr;
 }
 
-std::unordered_map<unsigned int, std::string>
-XFEM::storeMaterialProperties(HashMap<unsigned int, MaterialProperties> props) const
-{
-  std::unordered_map<unsigned int, std::string> props_serialized;
-  std::ostringstream oss;
-  std::string serialized_buffer;
-  for (auto p : props)
-  {
-    dataStore(oss, p.second, nullptr);
-    serialized_buffer.assign(oss.str());
-    props_serialized[p.first] = serialized_buffer;
-  }
-  return props_serialized;
-}
-
 void
-XFEM::storeMaterialPropertiesForElementHelper(const Elem * elem,
-                                              const MaterialPropertyStorage & storage)
+XFEM::storeMaterialPropertiesForElementHelper(const Elem * elem, MaterialPropertyStorage & storage)
 {
-  if (storage.hasStatefulProperties())
+  for (const auto state : storage.statefulIndexRange())
   {
-    auto props_old = storage.propsOld().at(elem);
-    _geom_cut_elems[elem]._elem_material_properties[0] = storeMaterialProperties(props_old);
-    if (storage.hasOlderProperties())
+    const auto & elem_props = storage.props(state).at(elem);
+    auto & serialized_props = _geom_cut_elems[elem]._elem_material_properties[state - 1];
+    serialized_props.clear();
+    for (const auto & side_props_pair : elem_props)
     {
-      auto props_older = storage.propsOlder().at(elem);
-      _geom_cut_elems[elem]._elem_material_properties[1] = storeMaterialProperties(props_older);
+      const auto side = side_props_pair.first;
+      std::ostringstream oss;
+      dataStore(oss, storage.setProps(elem, side, state), nullptr);
+      serialized_props[side].assign(oss.str());
     }
   }
 }
@@ -2198,7 +2210,7 @@ XFEM::storeMaterialPropertiesForElement(const Elem * parent_elem, const Elem * c
 
   // Locally store the element material properties
   storeMaterialPropertiesForElementHelper(child_elem,
-                                          (*_material_data)[0]->getMaterialPropertyStorage());
+                                          _material_data[0]->getMaterialPropertyStorageForXFEM({}));
 
   // Locally store the boundary material properties
   // First check if any of the side need material properties
@@ -2214,37 +2226,30 @@ XFEM::storeMaterialPropertiesForElement(const Elem * parent_elem, const Elem * c
 
   // If boundary material properties are needed for this element, then store them.
   if (need_boundary_materials)
-    storeMaterialPropertiesForElementHelper(child_elem,
-                                            (*_bnd_material_data)[0]->getMaterialPropertyStorage());
-}
-
-void
-XFEM::loadMaterialProperties(
-    HashMap<unsigned int, MaterialProperties> props_deserialized,
-    const std::unordered_map<unsigned int, std::string> & props_serialized) const
-{
-  std::istringstream iss;
-  for (auto p : props_serialized)
-  {
-    iss.str(p.second);
-    iss.clear();
-    dataLoad(iss, props_deserialized.at(p.first), nullptr);
-  }
+    storeMaterialPropertiesForElementHelper(
+        child_elem, _bnd_material_data[0]->getMaterialPropertyStorageForXFEM({}));
 }
 
 void
 XFEM::loadMaterialPropertiesForElementHelper(const Elem * elem,
                                              const Xfem::CachedMaterialProperties & cached_props,
-                                             const MaterialPropertyStorage & storage) const
+                                             MaterialPropertyStorage & storage) const
 {
-  if (storage.hasStatefulProperties())
+  if (!storage.hasStatefulProperties())
+    return;
+
+  for (const auto state : storage.statefulIndexRange())
   {
-    auto props_old = storage.propsOld().at(elem);
-    loadMaterialProperties(props_old, cached_props[0]);
-    if (storage.hasOlderProperties())
+    const auto & serialized_props = cached_props[state - 1];
+    for (const auto & [side, serialized_side_props] : serialized_props)
     {
-      auto props_older = storage.propsOlder().at(elem);
-      loadMaterialProperties(props_older, cached_props[1]);
+      std::istringstream iss;
+      iss.str(serialized_side_props);
+      iss.clear();
+
+      // This is very dirty. We should not write to MOOSE's stateful properties.
+      // Please remove me :(
+      dataLoad(iss, storage.setProps(elem, side, state), nullptr);
     }
   }
 }
@@ -2260,8 +2265,9 @@ XFEM::loadMaterialPropertiesForElement(
   Xfem::CutElemInfo & cei = cached_cei[elem_from];
 
   // Load element material properties from cached properties
-  loadMaterialPropertiesForElementHelper(
-      elem, cei._elem_material_properties, (*_material_data)[0]->getMaterialPropertyStorage());
+  loadMaterialPropertiesForElementHelper(elem,
+                                         cei._elem_material_properties,
+                                         _material_data[0]->getMaterialPropertyStorageForXFEM({}));
 
   // Check if any of the element side need material properties
   bool need_boundary_materials = false;
@@ -2277,7 +2283,9 @@ XFEM::loadMaterialPropertiesForElement(
   // Load boundary material properties from cached properties
   if (need_boundary_materials)
     loadMaterialPropertiesForElementHelper(
-        elem, cei._bnd_material_properties, (*_bnd_material_data)[0]->getMaterialPropertyStorage());
+        elem,
+        cei._bnd_material_properties,
+        _bnd_material_data[0]->getMaterialPropertyStorageForXFEM({}));
 }
 
 CutSubdomainID

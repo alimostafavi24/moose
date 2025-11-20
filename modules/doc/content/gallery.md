@@ -1,5 +1,19 @@
 !gallery! large=6
 
+!card! gallery/puma.mp4 title=Thermal post-processing of a turbine blade
+Simulation of the thermal post-processing pipeline of a turbine blade using [PUMA](https://github.com/applied-material-modeling/puma). The pipeline starts from a binder-jet printed porous silicon carbide preform filled with precursor phenolic resin. During pyrolysis, the resin thermally decomposes into carbonaceous char. The carbon-rich preform is then infiltrated with molten silicon, which reacts with carbon to form silicon carbide while any excess silicon fills remaining pores. This polymer infiltration and pyrolysis (PIP) process is repeated multiple cycles, yielding a dense Si–SiC composite. PUMA predicts degrees of reaction, phase fractions, temperature, deformation, and (residual) stress throughout the post-processing processes.
+
+!style fontsize=90% fontweight=100
+*Credit:*  Huy Tran, et. al. (ANL)
+!card-end!
+
+!card! gallery/weld.mp4 title=Welding simulation of a pressure vessel
+Simulation of the laser welding process (with a total of 8 weld passes) joining two separate vessel segments. The animation shows the complete transient of temperature, equivalent plastic strain, and von Mises stress. The coupled thermomechanical simulation is set up using the MALAMUTE app. Deposition of the weld material is modeled using element subdomain modifiers.
+
+!style fontsize=90% fontweight=100
+*Credit:*  Bipul Barua (ANL), Gary Hu (ANL), and Mark Messner (ANL)
+!card-end!
+
 !card! gallery/3D_SSB.mp4 title=Charge-discharge cycle of a full solid-state battery
 A complete charge-discharge cycle of a 3D full solid-state battery. The results are generated using EEL developed by the Argonne National Laboratory. The theoretical framework is described in [Hu, T., Messner, M. C., Barai, P., & Barua, B. (2022)](https://doi.org/10.2172/1891097).
 
@@ -16,7 +30,7 @@ Flow streamlines computed with the [Navier-Stokes](modules/navier_stokes/index.m
 
 !card! gallery/twist_gallery.mp4 title=Wire Twist
 Mechanical modeling of two copper wires being twisted together to create a twisted pair
-using the [Tensor Mechanics](modules/tensor_mechanics/index.md) and [Contact](modules/contact/index.md) modules.
+using the [Solid Mechanics](modules/solid_mechanics/index.md) and [Contact](modules/contact/index.md) modules.
 
 !style fontsize=90% fontweight=100
 *Credit:*  [Materials Science and Scientific Computing Department at UKAEA](https://ccfe.ukaea.uk/research/)
@@ -100,7 +114,7 @@ A 3D soil desiccation simulation using phase-field for cohesive fracture model, 
 !card-end!
 
 !card! contact/2d_indenter.mp4 title=Axisymmetric Spherical Indenter
-An elastic spherical indenter penetrates into a base material modeled with tensor-mechanics crystal plasticity.
+An elastic spherical indenter penetrates into a base material modeled with solid-mechanics crystal plasticity.
 [contact/index.md].
 !card-end!
 

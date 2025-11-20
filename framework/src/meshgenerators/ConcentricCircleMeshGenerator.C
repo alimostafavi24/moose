@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -315,11 +315,11 @@ ConcentricCircleMeshGenerator::generate()
   while (index <= limit)
   {
     // inner circle area (polygonal core)
-    Elem * elem = mesh->add_elem(new Quad4);
-    elem->set_node(0) = nodes[index];
-    elem->set_node(1) = nodes[index + _num_sectors / 2 + 1];
-    elem->set_node(2) = nodes[index + _num_sectors / 2 + 2];
-    elem->set_node(3) = nodes[index + 1];
+    Elem * elem = mesh->add_elem(std::make_unique<Quad4>());
+    elem->set_node(0, nodes[index]);
+    elem->set_node(1, nodes[index + _num_sectors / 2 + 1]);
+    elem->set_node(2, nodes[index + _num_sectors / 2 + 2]);
+    elem->set_node(3, nodes[index + 1]);
     elem->subdomain_id() = subdomainIDs[0];
 
     if (index < standard / 2)
@@ -341,11 +341,11 @@ ConcentricCircleMeshGenerator::generate()
   while (index < limit)
   {
     // inner circle elements touching B
-    Elem * elem = mesh->add_elem(new Quad4);
-    elem->set_node(0) = nodes[index];
-    elem->set_node(1) = nodes[index + _num_sectors / 2 + 1];
-    elem->set_node(2) = nodes[index + _num_sectors / 2 + 2];
-    elem->set_node(3) = nodes[index + 1];
+    Elem * elem = mesh->add_elem(std::make_unique<Quad4>());
+    elem->set_node(0, nodes[index]);
+    elem->set_node(1, nodes[index + _num_sectors / 2 + 1]);
+    elem->set_node(2, nodes[index + _num_sectors / 2 + 2]);
+    elem->set_node(3, nodes[index + 1]);
     elem->subdomain_id() = subdomainIDs[0];
 
     if (index == (standard / 2 + 1) * (standard / 2))
@@ -359,12 +359,11 @@ ConcentricCircleMeshGenerator::generate()
   while (index != standard / 2)
   {
     // inner circle elements touching C
-    Elem * elem = mesh->add_elem(new Quad4);
-    elem->set_node(0) = nodes[index];
-    elem->set_node(1) = nodes[index + (_num_sectors / 2 + 1) + counter * (_num_sectors / 2 + 2)];
-    elem->set_node(2) =
-        nodes[index + (_num_sectors / 2 + 1) + counter * (_num_sectors / 2 + 2) + 1];
-    elem->set_node(3) = nodes[index - _num_sectors / 2 - 1];
+    Elem * elem = mesh->add_elem(std::make_unique<Quad4>());
+    elem->set_node(0, nodes[index]);
+    elem->set_node(1, nodes[index + (_num_sectors / 2 + 1) + counter * (_num_sectors / 2 + 2)]);
+    elem->set_node(2, nodes[index + (_num_sectors / 2 + 1) + counter * (_num_sectors / 2 + 2) + 1]);
+    elem->set_node(3, nodes[index - _num_sectors / 2 - 1]);
     elem->subdomain_id() = subdomainIDs[0];
 
     if (index == standard + 1)
@@ -384,11 +383,11 @@ ConcentricCircleMeshGenerator::generate()
 
   while (index < limit)
   {
-    Elem * elem = mesh->add_elem(new Quad4);
-    elem->set_node(0) = nodes[index];
-    elem->set_node(1) = nodes[index + standard + 1];
-    elem->set_node(2) = nodes[index + standard + 2];
-    elem->set_node(3) = nodes[index + 1];
+    Elem * elem = mesh->add_elem(std::make_unique<Quad4>());
+    elem->set_node(0, nodes[index]);
+    elem->set_node(1, nodes[index + standard + 1]);
+    elem->set_node(2, nodes[index + standard + 2]);
+    elem->set_node(3, nodes[index + 1]);
 
     for (int i = 0; i < static_cast<int>(subdomainIDs.size() - 1); ++i)
       if (index < limit - (standard + 1) * i && index >= limit - (standard + 1) * (i + 1))
@@ -441,11 +440,11 @@ ConcentricCircleMeshGenerator::generate()
       while (index <= limit)
       {
         // outer square sector C
-        Elem * elem = mesh->add_elem(new Quad4);
-        elem->set_node(0) = nodes[index];
-        elem->set_node(1) = nodes[index + 1];
-        elem->set_node(2) = nodes[index + 1 + _rings.back() + 1];
-        elem->set_node(3) = nodes[index + 1 + _rings.back()];
+        Elem * elem = mesh->add_elem(std::make_unique<Quad4>());
+        elem->set_node(0, nodes[index]);
+        elem->set_node(1, nodes[index + 1]);
+        elem->set_node(2, nodes[index + 1 + _rings.back() + 1]);
+        elem->set_node(3, nodes[index + 1 + _rings.back()]);
         elem->subdomain_id() = subdomainIDs.back() + 1;
 
         if (index < (initial2 + static_cast<int>(_rings.back())))
@@ -477,11 +476,11 @@ ConcentricCircleMeshGenerator::generate()
       while (index <= limit)
       {
         // outer square sector A
-        Elem * elem = mesh->add_elem(new Quad4);
-        elem->set_node(3) = nodes[index];
-        elem->set_node(2) = nodes[index + _rings.back() + 2];
-        elem->set_node(1) = nodes[index + _rings.back() + 3];
-        elem->set_node(0) = nodes[index + 1];
+        Elem * elem = mesh->add_elem(std::make_unique<Quad4>());
+        elem->set_node(3, nodes[index]);
+        elem->set_node(2, nodes[index + _rings.back() + 2]);
+        elem->set_node(1, nodes[index + _rings.back() + 3]);
+        elem->set_node(0, nodes[index + 1]);
         elem->subdomain_id() = subdomainIDs.back() + 1;
 
         if (index >= static_cast<int>(limit - (_rings.back() + 1)))
@@ -509,11 +508,11 @@ ConcentricCircleMeshGenerator::generate()
                    _rings.back() * (_rings.back() + 2) - (_rings.back() + 1);
 
       // pointy tips of the A sectors, touching the inner circle
-      Elem * elem = mesh->add_elem(new Quad4);
-      elem->set_node(3) = nodes[index1];
-      elem->set_node(2) = nodes[index2];
-      elem->set_node(1) = nodes[index2 + _rings.back() + 1];
-      elem->set_node(0) = nodes[index2 + _rings.back() + 2];
+      Elem * elem = mesh->add_elem(std::make_unique<Quad4>());
+      elem->set_node(3, nodes[index1]);
+      elem->set_node(2, nodes[index2]);
+      elem->set_node(1, nodes[index2 + _rings.back() + 1]);
+      elem->set_node(0, nodes[index2 + _rings.back() + 2]);
       elem->subdomain_id() = subdomainIDs.back() + 1;
 
       // adding elements for the left mid part.
@@ -524,11 +523,11 @@ ConcentricCircleMeshGenerator::generate()
       while (index <= limit)
       {
         // outer square elements in sector C touching the inner circle
-        Elem * elem = mesh->add_elem(new Quad4);
-        elem->set_node(3) = nodes[index];
-        elem->set_node(2) = nodes[index + 1];
-        elem->set_node(1) = nodes[index2 - _rings.back() - 1];
-        elem->set_node(0) = nodes[index2];
+        Elem * elem = mesh->add_elem(std::make_unique<Quad4>());
+        elem->set_node(3, nodes[index]);
+        elem->set_node(2, nodes[index + 1]);
+        elem->set_node(1, nodes[index2 - _rings.back() - 1]);
+        elem->set_node(0, nodes[index2]);
         elem->subdomain_id() = subdomainIDs.back() + 1;
 
         if (index == limit)
@@ -552,11 +551,11 @@ ConcentricCircleMeshGenerator::generate()
           (_rings.back() + 1) * (standard / 2) - 1 + (_rings.back() + 1) + (_rings.back() + 2);
 
       // elements clockwise from the A sector tips
-      elem = mesh->add_elem(new Quad4);
-      elem->set_node(0) = nodes[index1];
-      elem->set_node(1) = nodes[index1 - 1];
-      elem->set_node(2) = nodes[index2];
-      elem->set_node(3) = nodes[index3];
+      elem = mesh->add_elem(std::make_unique<Quad4>());
+      elem->set_node(0, nodes[index1]);
+      elem->set_node(1, nodes[index1 - 1]);
+      elem->set_node(2, nodes[index2]);
+      elem->set_node(3, nodes[index3]);
       elem->subdomain_id() = subdomainIDs.back() + 1;
 
       if (standard == 2)
@@ -579,11 +578,11 @@ ConcentricCircleMeshGenerator::generate()
         while (index >= limit)
         {
           // outer square elements in sector B touching the inner circle
-          Elem * elem = mesh->add_elem(new Quad4);
-          elem->set_node(0) = nodes[index];
-          elem->set_node(1) = nodes[index1];
-          elem->set_node(2) = nodes[index1 - (_rings.back() + 1)];
-          elem->set_node(3) = nodes[index + 1];
+          Elem * elem = mesh->add_elem(std::make_unique<Quad4>());
+          elem->set_node(0, nodes[index]);
+          elem->set_node(1, nodes[index1]);
+          elem->set_node(2, nodes[index1 - (_rings.back() + 1)]);
+          elem->set_node(3, nodes[index + 1]);
           elem->subdomain_id() = subdomainIDs.back() + 1;
 
           if (index == limit)
@@ -602,11 +601,11 @@ ConcentricCircleMeshGenerator::generate()
       if (standard >= 2)
       {
         // single elements between A and B on the outside of the square
-        Elem * elem = mesh->add_elem(new Quad4);
-        elem->set_node(3) = nodes[index];
-        elem->set_node(2) = nodes[index + 1];
-        elem->set_node(1) = nodes[index + 2];
-        elem->set_node(0) = nodes[index1];
+        Elem * elem = mesh->add_elem(std::make_unique<Quad4>());
+        elem->set_node(3, nodes[index]);
+        elem->set_node(2, nodes[index + 1]);
+        elem->set_node(1, nodes[index + 2]);
+        elem->set_node(0, nodes[index1]);
         elem->subdomain_id() = subdomainIDs.back() + 1;
 
         boundary_info.add_side(elem, 2, 3);
@@ -625,11 +624,11 @@ ConcentricCircleMeshGenerator::generate()
       int k = 1;
       while (index > limit)
       {
-        Elem * elem = mesh->add_elem(new Quad4);
-        elem->set_node(3) = nodes[index];
-        elem->set_node(2) = nodes[index + (_rings.back() + 2) * k + k + 1];
-        elem->set_node(1) = nodes[index + (_rings.back() + 2) * k + k + 2];
-        elem->set_node(0) = nodes[index - _rings.back() - 2];
+        Elem * elem = mesh->add_elem(std::make_unique<Quad4>());
+        elem->set_node(3, nodes[index]);
+        elem->set_node(2, nodes[index + (_rings.back() + 2) * k + k + 1]);
+        elem->set_node(1, nodes[index + (_rings.back() + 2) * k + k + 2]);
+        elem->set_node(0, nodes[index - _rings.back() - 2]);
         elem->subdomain_id() = subdomainIDs.back() + 1;
         index = index - (_rings.back() + 2);
         ++k;
@@ -656,11 +655,11 @@ ConcentricCircleMeshGenerator::generate()
       {
         while (index < limit)
         {
-          Elem * elem = mesh->add_elem(new Quad4);
-          elem->set_node(0) = nodes[index];
-          elem->set_node(1) = nodes[index + 1];
-          elem->set_node(2) = nodes[index + 1 + _rings.back() + 1];
-          elem->set_node(3) = nodes[index + 1 + _rings.back()];
+          Elem * elem = mesh->add_elem(std::make_unique<Quad4>());
+          elem->set_node(0, nodes[index]);
+          elem->set_node(1, nodes[index + 1]);
+          elem->set_node(2, nodes[index + 1 + _rings.back() + 1]);
+          elem->set_node(3, nodes[index + 1 + _rings.back()]);
           elem->subdomain_id() = subdomainIDs.back() + 1;
 
           if (index > initial2)
@@ -752,7 +751,7 @@ ConcentricCircleMeshGenerator::generate()
       MeshTools::Modification::change_boundary_id(other_mesh, 7, 4);
       mesh->prepare_for_use();
       other_mesh.prepare_for_use();
-      mesh->stitch_meshes(other_mesh, 1, 3, TOLERANCE, true);
+      mesh->stitch_meshes(other_mesh, 1, 3, TOLERANCE, true, /*verbose=*/false);
       mesh->get_boundary_info().sideset_name(1) = "left";
       mesh->get_boundary_info().sideset_name(2) = "bottom";
       mesh->get_boundary_info().sideset_name(3) = "right";
@@ -765,7 +764,7 @@ ConcentricCircleMeshGenerator::generate()
       MeshTools::Modification::change_boundary_id(other_mesh, 5, 2);
       mesh->prepare_for_use();
       other_mesh.prepare_for_use();
-      mesh->stitch_meshes(other_mesh, 1, 1, TOLERANCE, true);
+      mesh->stitch_meshes(other_mesh, 1, 1, TOLERANCE, true, /*verbose=*/false);
 
       MeshTools::Modification::change_boundary_id(*mesh, 2, 1);
       MeshTools::Modification::change_boundary_id(*mesh, 3, 2);
@@ -791,7 +790,7 @@ ConcentricCircleMeshGenerator::generate()
       MeshTools::Modification::change_boundary_id(other_mesh, 7, 2);
       mesh->prepare_for_use();
       other_mesh.prepare_for_use();
-      mesh->stitch_meshes(other_mesh, 2, 4, TOLERANCE, true);
+      mesh->stitch_meshes(other_mesh, 2, 4, TOLERANCE, true, /*verbose=*/false);
       mesh->get_boundary_info().sideset_name(1) = "left";
       mesh->get_boundary_info().sideset_name(2) = "bottom";
       mesh->get_boundary_info().sideset_name(3) = "right";
@@ -804,7 +803,7 @@ ConcentricCircleMeshGenerator::generate()
       MeshTools::Modification::change_boundary_id(other_mesh, 5, 2);
       mesh->prepare_for_use();
       other_mesh.prepare_for_use();
-      mesh->stitch_meshes(other_mesh, 2, 2, TOLERANCE, true);
+      mesh->stitch_meshes(other_mesh, 2, 2, TOLERANCE, true, /*verbose=*/false);
 
       MeshTools::Modification::change_boundary_id(*mesh, 3, 2);
       mesh->get_boundary_info().sideset_name(1) = "left";
@@ -839,7 +838,7 @@ ConcentricCircleMeshGenerator::generate()
       MeshTools::Modification::change_boundary_id(*mesh, 7, 1);
       mesh->prepare_for_use();
       other_mesh.prepare_for_use();
-      mesh->stitch_meshes(other_mesh, 4, 2, TOLERANCE, true);
+      mesh->stitch_meshes(other_mesh, 4, 2, TOLERANCE, true, /*verbose=*/false);
       mesh->get_boundary_info().sideset_name(1) = "left";
       mesh->get_boundary_info().sideset_name(2) = "bottom";
       mesh->get_boundary_info().sideset_name(3) = "right";
@@ -852,7 +851,7 @@ ConcentricCircleMeshGenerator::generate()
       MeshTools::Modification::change_boundary_id(*mesh, 5, 2);
       mesh->prepare_for_use();
       other_mesh.prepare_for_use();
-      mesh->stitch_meshes(other_mesh, 1, 1, TOLERANCE, true);
+      mesh->stitch_meshes(other_mesh, 1, 1, TOLERANCE, true, /*verbose=*/false);
 
       MeshTools::Modification::change_boundary_id(*mesh, 2, 1);
       MeshTools::Modification::change_boundary_id(*mesh, 3, 2);
@@ -887,7 +886,7 @@ ConcentricCircleMeshGenerator::generate()
       MeshTools::Modification::change_boundary_id(*mesh, 7, 2);
       mesh->prepare_for_use();
       other_mesh.prepare_for_use();
-      mesh->stitch_meshes(other_mesh, 1, 3, TOLERANCE, true);
+      mesh->stitch_meshes(other_mesh, 1, 3, TOLERANCE, true, /*verbose=*/false);
       mesh->get_boundary_info().sideset_name(1) = "left";
       mesh->get_boundary_info().sideset_name(2) = "bottom";
       mesh->get_boundary_info().sideset_name(3) = "right";
@@ -900,7 +899,7 @@ ConcentricCircleMeshGenerator::generate()
       MeshTools::Modification::change_boundary_id(*mesh, 5, 2);
       mesh->prepare_for_use();
       other_mesh.prepare_for_use();
-      mesh->stitch_meshes(other_mesh, 1, 1, TOLERANCE, true);
+      mesh->stitch_meshes(other_mesh, 1, 1, TOLERANCE, true, /*verbose=*/false);
 
       MeshTools::Modification::change_boundary_id(*mesh, 2, 1);
       MeshTools::Modification::change_boundary_id(*mesh, 3, 2);
@@ -929,7 +928,7 @@ ConcentricCircleMeshGenerator::generate()
       mesh->prepare_for_use();
       portion_two.prepare_for_use();
       // 'top_half'
-      mesh->stitch_meshes(portion_two, 1, 3, TOLERANCE, true);
+      mesh->stitch_meshes(portion_two, 1, 3, TOLERANCE, true, /*verbose=*/false);
 
       // 'bottom_half'
       ReplicatedMesh portion_bottom(*mesh);
@@ -944,7 +943,7 @@ ConcentricCircleMeshGenerator::generate()
       mesh->prepare_for_use();
       portion_bottom.prepare_for_use();
       // 'full'
-      mesh->stitch_meshes(portion_bottom, 2, 4, TOLERANCE, true);
+      mesh->stitch_meshes(portion_bottom, 2, 4, TOLERANCE, true, /*verbose=*/false);
 
       mesh->get_boundary_info().sideset_name(1) = "left";
       mesh->get_boundary_info().sideset_name(2) = "bottom";
@@ -960,14 +959,14 @@ ConcentricCircleMeshGenerator::generate()
       // 'top half'
       mesh->prepare_for_use();
       portion_two.prepare_for_use();
-      mesh->stitch_meshes(portion_two, 1, 1, TOLERANCE, true);
+      mesh->stitch_meshes(portion_two, 1, 1, TOLERANCE, true, /*verbose=*/false);
       // 'bottom half'
       ReplicatedMesh portion_bottom(*mesh);
       MeshTools::Modification::rotate(portion_bottom, 180, 0, 0);
       // 'full'
       mesh->prepare_for_use();
       portion_bottom.prepare_for_use();
-      mesh->stitch_meshes(portion_bottom, 2, 2, TOLERANCE, true);
+      mesh->stitch_meshes(portion_bottom, 2, 2, TOLERANCE, true, /*verbose=*/false);
       MeshTools::Modification::change_boundary_id(*mesh, 3, 1);
       mesh->get_boundary_info().sideset_name(1) = "outer";
       portion_bottom.clear();
@@ -980,8 +979,9 @@ ConcentricCircleMeshGenerator::generate()
     mesh->prepare_for_use();
 
   // Laplace smoothing
-  LaplaceMeshSmoother lms(*mesh);
+  libMesh::LaplaceMeshSmoother lms(*mesh);
   lms.smooth(_smoothing_max_it);
 
+  mesh->prepare_for_use();
   return dynamic_pointer_cast<MeshBase>(mesh);
 }

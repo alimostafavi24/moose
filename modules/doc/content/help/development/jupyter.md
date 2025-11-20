@@ -29,7 +29,7 @@ In the directory in which the notebook files are to be stored execute
 jupyter-notebook
 ```
 
-A browser window sould open with a list of notebooks (`*.ipynb` files) and a few UI elements.
+A browser window should open with a list of notebooks (`*.ipynb` files) and a few UI elements.
 
 ## Starting a new notebook
 
@@ -37,6 +37,7 @@ From the _New_ dropdown in the top right select _Python 2_ under _Notebooks_. A 
 with an empty notebook should open.
 
 !media media/jupyter_new.png
+       alt=Screenshot of a new, empty Python 2 notebook in Jupyter.
 
 Start by importing [sympy](http://www.sympy.org/en/index.html) in `In [1]:` and enabling LaTeX rendering for equations.
 
@@ -61,7 +62,7 @@ f
 ```
 
 The lone `f` on the second line causes the expression to be printed in `Out [3]:`. We can now build a few symbolic
-deriuvatives of the expression `f` with respect to `c` and `eta`
+derivatives of the expression `f` with respect to `c` and `eta`
 
 ```python
 (diff(f, c), diff(f,eta))
@@ -70,6 +71,7 @@ deriuvatives of the expression `f` with respect to `c` and `eta`
 This should yield
 
 !media media/jupyter_example.png
+       alt=Image of the Jupyter notebook after executing the commands described above.
 
 ## Enabling and disabling the environment
 

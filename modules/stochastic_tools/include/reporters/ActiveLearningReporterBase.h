@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -95,10 +95,11 @@ protected:
     return true;
   }
 
-private:
   /// Sampler given in the parameters, must match the one used to declare the
   /// transferred values.
   Sampler & _sampler;
+
+private:
   /// Reporter value determining whether we need to evaluate the sample through
   /// a multiapp or other means.
   std::vector<bool> & _need_sample;

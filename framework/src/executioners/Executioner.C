@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -26,7 +26,7 @@ InputParameters
 Executioner::validParams()
 {
   InputParameters params = MooseObject::validParams();
-  params += PicardSolve::validParams();
+  params += FixedPointSolve::validParams();
   params += Reporter::validParams();
   params += ReporterInterface::validParams();
 
@@ -42,10 +42,16 @@ Executioner::validParams()
       "File base name used for restart",
       "Please use \"Problem/restart_file_base\" instead");
 
+  // An executioner should never be disabled
+  params.suppressParameter<bool>("enable");
+
   params.registerBase("Executioner");
 
   params.addParamNamesToGroup("fixed_point_algorithm", "Fixed point iterations");
   params.addParamNamesToGroup("restart_file_base", "Restart");
+
+  // Whether or not this executioner supports --test-restep capability
+  params.addPrivateParam<bool>("_supports_test_restep", false);
 
   return params;
 }
@@ -64,18 +70,26 @@ Executioner::Executioner(const InputParameters & parameters)
     _restart_file_base(getParam<FileNameNoExtension>("restart_file_base")),
     _verbose(getParam<bool>("verbose"))
 {
-  _fe_problem.getNonlinearSystemBase().setVerboseFlag(_verbose);
+  for (const auto i : make_range(_fe_problem.numNonlinearSystems()))
+    _fe_problem.getNonlinearSystemBase(i).setVerboseFlag(_verbose);
 
   if (!_restart_file_base.empty())
     _fe_problem.setRestartFile(_restart_file_base);
 
-  // Instantiate the SolveObject for the fixed point iteration algorithm
+  if (!getParam<bool>("_supports_test_restep") && _app.testReStep())
+    mooseInfo("This Executioner does not support --test-restep; solve will behave as normal");
+
+  // Instantiate the SolveObject for the MultiApp fixed point iteration algorithm
   if (_iteration_method == "picard")
     _fixed_point_solve = std::make_unique<PicardSolve>(*this);
   else if (_iteration_method == "secant")
     _fixed_point_solve = std::make_unique<SecantSolve>(*this);
   else if (_iteration_method == "steffensen")
     _fixed_point_solve = std::make_unique<SteffensenSolve>(*this);
+
+  // Propagate the verbosity down to the problem
+  if (_verbose)
+    _fe_problem.setVerboseProblem(_verbose);
 }
 
 Executioner::Executioner(const InputParameters & parameters, bool)
@@ -94,6 +108,9 @@ Executioner::Executioner(const InputParameters & parameters, bool)
 {
   if (!_restart_file_base.empty())
     _fe_problem.setRestartFile(_restart_file_base);
+
+  if (!getParam<bool>("_supports_test_restep") && _app.testReStep())
+    mooseInfo("This Executioner does not support --test-restep; solve will behave as normal");
 }
 
 Problem &

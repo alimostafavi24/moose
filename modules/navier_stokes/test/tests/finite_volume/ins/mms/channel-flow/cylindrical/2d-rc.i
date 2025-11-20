@@ -14,9 +14,6 @@ velocity_interp_method='rc'
     nx = 2
     ny = 2
   []
-[]
-
-[Problem]
   coord_type = 'RZ'
 []
 
@@ -121,13 +118,13 @@ velocity_interp_method='rc'
     type = INSFVInletVelocityBC
     boundary = 'bottom'
     variable = u
-    function = 'exact_u'
+    functor = 'exact_u'
   []
   [inlet-v]
     type = INSFVInletVelocityBC
     boundary = 'bottom'
     variable = v
-    function = 'exact_v'
+    functor = 'exact_v'
   []
   [no-slip-wall-u]
     type = INSFVNoSlipWallBC
@@ -184,7 +181,7 @@ velocity_interp_method='rc'
     symbol_values = '${rho}'
   []
   [forcing_u]
-    type = ADParsedFunction
+    type = ParsedFunction
     expression = '(1/4)*pi^2*mu*sin(x*pi)^2*sin((1/2)*y*pi) - pi*sin(x*pi)*cos((1/2)*y*pi) + (4*x*pi*rho*sin(x*pi)^3*sin((1/2)*y*pi)^2*cos(x*pi) + rho*sin(x*pi)^4*sin((1/2)*y*pi)^2)/x + (-x*pi*rho*sin(x*pi)^2*sin((1/2)*y*pi)*sin(y*pi)*cos(x*pi) + (1/2)*x*pi*rho*sin(x*pi)^2*cos(x*pi)*cos((1/2)*y*pi)*cos(y*pi))/x - (-2*x*pi^2*mu*sin(x*pi)^2*sin((1/2)*y*pi) + 2*x*pi^2*mu*sin((1/2)*y*pi)*cos(x*pi)^2 + 2*pi*mu*sin(x*pi)*sin((1/2)*y*pi)*cos(x*pi))/x'
     symbol_names = 'mu rho'
     symbol_values = '${mu} ${rho}'
@@ -200,7 +197,7 @@ velocity_interp_method='rc'
     symbol_values = '${rho}'
   []
   [forcing_v]
-    type = ADParsedFunction
+    type = ParsedFunction
     expression = 'pi^2*mu*cos(x*pi)*cos(y*pi) - 2*pi*rho*sin(y*pi)*cos(x*pi)^2*cos(y*pi) - 1/2*pi*sin((1/2)*y*pi)*cos(x*pi) - (-x*pi^2*mu*cos(x*pi)*cos(y*pi) - pi*mu*sin(x*pi)*cos(y*pi))/x + (-x*pi*rho*sin(x*pi)^3*sin((1/2)*y*pi)*cos(y*pi) + 2*x*pi*rho*sin(x*pi)*sin((1/2)*y*pi)*cos(x*pi)^2*cos(y*pi) + rho*sin(x*pi)^2*sin((1/2)*y*pi)*cos(x*pi)*cos(y*pi))/x'
     symbol_names = 'mu rho'
     symbol_values = '${mu} ${rho}'

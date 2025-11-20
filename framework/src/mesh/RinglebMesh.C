@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -8,6 +8,8 @@
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
 #include "RinglebMesh.h"
+
+#include "MooseApp.h"
 
 #include "libmesh/face_quad4.h"
 #include "libmesh/face_tri3.h"
@@ -64,7 +66,7 @@ RinglebMesh::RinglebMesh(const InputParameters & parameters)
 std::unique_ptr<MooseMesh>
 RinglebMesh::safeClone() const
 {
-  return std::make_unique<RinglebMesh>(*this);
+  return _app.getFactory().copyConstruct(*this);
 }
 
 std::vector<Real>
@@ -178,10 +180,10 @@ RinglebMesh::buildMesh()
       if (j != _num_q_pts + _n_extra_q_pts - 1 and j != _num_q_pts + _n_extra_q_pts - 2)
       {
         Elem * elem = mesh.add_elem(new Quad4);
-        elem->set_node(0) = stream_nodes[i][j];
-        elem->set_node(1) = stream_nodes[i][j + 1];
-        elem->set_node(2) = stream_nodes[i + 1][j + 1];
-        elem->set_node(3) = stream_nodes[i + 1][j];
+        elem->set_node(0, stream_nodes[i][j]);
+        elem->set_node(1, stream_nodes[i][j + 1]);
+        elem->set_node(2, stream_nodes[i + 1][j + 1]);
+        elem->set_node(3, stream_nodes[i + 1][j]);
 
         if (i == 0)
           boundary_info.add_side(elem->id(), /*side=*/0, _outer_wall_bid);
@@ -195,10 +197,10 @@ RinglebMesh::buildMesh()
       else if (j == _num_q_pts + _n_extra_q_pts - 2)
       {
         Elem * elem = mesh.add_elem(new Quad4);
-        elem->set_node(0) = stream_nodes[i][j];
-        elem->set_node(1) = stream_nodes[i][j + 2];
-        elem->set_node(2) = stream_nodes[i + 1][j + 2];
-        elem->set_node(3) = stream_nodes[i + 1][j];
+        elem->set_node(0, stream_nodes[i][j]);
+        elem->set_node(1, stream_nodes[i][j + 2]);
+        elem->set_node(2, stream_nodes[i + 1][j + 2]);
+        elem->set_node(3, stream_nodes[i + 1][j]);
 
         if (i == 0)
           boundary_info.add_side(elem->id(), /*side=*/0, _outer_wall_bid);

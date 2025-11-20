@@ -7,8 +7,11 @@ BCs: boundary conditions
 BVP: boundary value problem
 CCB: Change Control Board
 CCI: Communication and Contact Information
+CD: continuous deployment
+CI: continuous integration
 CIVET: Continuous Integration for Verification, Enhancement, and Testing
 CMP: Configuration Management Plan
+CSG: Constructive Solid Geometry
 CSV: comma-separated values
 DOE: Department of Energy
 DOE-NE: Department of Energy, Nuclear Energy
@@ -17,6 +20,7 @@ DOFs: degrees-of-freedom
 EA: Enterprise Architecture
 FE: finite element
 FEM: Finite Element Method
+FVM: Finite Volume Method
 GMRES: Generalized Minimum Residual Method
 GUI: graphical user interface
 HIT: Hierarchical Input Text
@@ -29,11 +33,14 @@ JFNK: Jacobian-Free Newton-Krylov
 JSON: JavaScript Object Notation
 LGPL: GNU Lesser General Public License
 LWP: Laboratory Wide Procedure
+MC: Monte Carlo
 MMS: Method of Manufactured Solutions
 MWR: Method of Mean Weighted Residuals
 MPI: Message Passing Interface
 MOOSE: Multiphysics Object Oriented Simulation Environment
 NE: Nuclear Energy
+NEAMS: Nuclear Energy Advanced Modeling and Simulation
+NCRC: Nuclear Computational Resource Center
 NQA-1: Nuclear Quality Assurance Level 1
 PETSc: Portable, Extensible Toolkit for Scientific Computation
 POSIX: Portable Operating System Interface
@@ -58,3 +65,4 @@ FAR: Failure Analysis Report
 QLD: Quality Level Determination
 QP: quadrature point
 QPs: quadrature points
+URI: uniform resource identifier

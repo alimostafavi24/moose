@@ -1,4 +1,4 @@
-# Adaptivity System
+# [Adaptivity System](syntax/Adaptivity/index.md)
 
 !---
 
@@ -31,6 +31,7 @@ elements of the same type.
 
 !col width=25%
 !media darcy_thermo_mech/adaptivity_pattern.png
+       alt=Illustration of elements being h-refined by splitting into smaller "child" elements.
 !row-end!
 
 !---
@@ -69,9 +70,6 @@ Refine if error is greater than a specified value and coarsen if it is less.
 
 `ValueThresholdMarker`\\
 Refine if variable value is greater than a specific value and coarsen if it is less.
-
-`UniformMarker`\\
-Refine or coarsen all elements.
 
 `BoxMarker`\\
 Refine or coarsen inside or outside a given box.

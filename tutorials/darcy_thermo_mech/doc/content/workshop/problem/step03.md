@@ -24,8 +24,8 @@ viscosity.
 
 Both shall be computed with a single `Material` object: `PackedColumn`.
 
-As in the reference article, permeability varies with the size of the steel spheres, so linear
-interpolation will be used for defining this property.
+As in the reference article, permeability varies with the size of the steel spheres, so we'll
+perform an interpolation calculation for it over the range of valid values.
 
 !---
 
@@ -50,26 +50,26 @@ it must be updated to consume the newly created material properties.
 
 ## DarcyPressure.h
 
-!listing step03_darcy_material/include/kernels/DarcyPressure.h
+!listing step03_darcy_material/include/kernels/DarcyPressure.h diff=step02_darcy_pressure/include/kernels/DarcyPressure.h
 
 !---
 
 ## DarcyPressure.C
 
-!listing step03_darcy_material/src/kernels/DarcyPressure.C
+!listing step03_darcy_material/src/kernels/DarcyPressure.C diff=step02_darcy_pressure/src/kernels/DarcyPressure.C
 
 !---
 
 ## Step 3: Input File
 
-!listing step03_darcy_material/problems/step3.i
+!listing step03_darcy_material/problems/step3.i diff=step02_darcy_pressure/problems/step2.i
 
 !---
 
 ## Step 3: Run
 
 ```bash
-cd ~/projects/moose/tutorials/darcy-thermo_mech/step03_darcy_material
+cd ~/projects/moose/tutorials/darcy_thermo_mech/step03_darcy_material
 make -j 12 # use number of processors for your system
 cd problems
 ../darcy_thermo_mech-opt -i step3.i
@@ -80,6 +80,7 @@ cd problems
 ## Step 3: Result
 
 !media darcy_thermo_mech/step03_result.png
+       alt=Pressure field obtained by running the simulation above.
 
 !---
 
@@ -91,10 +92,11 @@ Update the input file to vary the sphere size from 1 to 3 along the length of th
 
 ## Step 3b: Input File
 
-!listing step03_darcy_material/problems/step3b.i
+!listing step03_darcy_material/problems/step3b.i diff=step03_darcy_material/problems/step3.i
 
 !---
 
 ## Step 3b: Result
 
 !media darcy_thermo_mech/step03b_result.png
+       alt=Pressure and permeability fields for variable-sized spheres, obtained by running the simulation above.

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -37,10 +37,12 @@ DiscreteLineSegmentInterface::DiscreteLineSegmentInterface(const MooseObject * m
     _rotation(moose_object->parameters().get<Real>("rotation")),
     _lengths(moose_object->parameters().get<std::vector<Real>>("length")),
     _length(std::accumulate(_lengths.begin(), _lengths.end(), 0.0)),
+    _end_point(_position + _dir * _length),
     _n_elems(moose_object->parameters().get<std::vector<unsigned int>>("n_elems")),
     _n_elem(std::accumulate(_n_elems.begin(), _n_elems.end(), 0)),
     _n_sections(_lengths.size()),
     _section_end(_n_sections),
+    _x_centers(_n_elem),
     _R(computeDirectionTransformationTensor(_dir)),
     _Rx(computeXRotationTransformationTensor(_rotation)),
     _R_inv(_R.inverse()),
@@ -48,6 +50,26 @@ DiscreteLineSegmentInterface::DiscreteLineSegmentInterface(const MooseObject * m
     _moose_object_name_dlsi(moose_object->name())
 {
   std::partial_sum(_lengths.begin(), _lengths.end(), _section_end.begin());
+
+  if (_lengths.size() != _n_elems.size())
+    mooseError("The parameters 'length' and 'n_elems' must have the same number of entries.");
+
+  // Compute the axial coordinates of the centers of each element
+  unsigned int k_section_begin = 0;
+  Real x_begin = 0.0;
+  _dx_min = std::numeric_limits<Real>::max();
+  for (unsigned int j = 0; j < _n_sections; j++)
+  {
+    const Real dx = _lengths[j] / _n_elems[j];
+    _dx_min = std::min(dx, _dx_min);
+    for (unsigned int i = 0; i < _n_elems[j]; i++)
+    {
+      const unsigned int k = k_section_begin + i;
+      _x_centers[k] = x_begin + 0.5 * dx;
+      x_begin += dx;
+    }
+    k_section_begin += _n_elems[j];
+  }
 }
 
 RealVectorValue
@@ -118,6 +140,17 @@ DiscreteLineSegmentInterface::getAxialSectionIndex(const Point & p) const
       return i;
 
   mooseError("No axial section index was found.");
+}
+
+unsigned int
+DiscreteLineSegmentInterface::getAxialElementIndex(const Point & p_center) const
+{
+  const Real axial_coordinate = computeAxialCoordinate(p_center);
+  for (unsigned int i = 0; i < _n_elem; ++i)
+    if (MooseUtils::absoluteFuzzyEqual(axial_coordinate, _x_centers[i]))
+      return i;
+
+  mooseError("No axial element index was found.");
 }
 
 Point

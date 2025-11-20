@@ -67,7 +67,7 @@
     type = ParsedMaterial
     f_name = 'thermal_conductivity'
     function = '.01*T'
-    args = 'T'
+    coupled_variables = 'T'
   []
 []
 
@@ -83,6 +83,7 @@
 [Reporters]
   [measure_data]
     type = OptimizationData
+    objective_name = objective_value
     variable = T
   []
   [params]

@@ -25,7 +25,7 @@ rho = 1
 
     inlet_boundaries = 'top'
     momentum_inlet_types = 'fixed-velocity'
-    momentum_inlet_function = '1 0'
+    momentum_inlet_functors = '1 0'
 
     wall_boundaries = 'left right bottom'
     momentum_wall_types = 'noslip noslip noslip'
@@ -33,6 +33,9 @@ rho = 1
     pin_pressure = true
     pinned_pressure_type = average
     pinned_pressure_value = 0
+
+    mass_advection_interpolation = 'average'
+    momentum_advection_interpolation = 'average'
   []
 []
 

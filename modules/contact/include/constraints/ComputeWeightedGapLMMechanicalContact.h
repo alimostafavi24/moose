@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -12,6 +12,8 @@
 #include "ADMortarConstraint.h"
 
 #include <unordered_map>
+
+class WeightedGapUserObject;
 
 /**
  * Computes the weighted gap that will later be used to enforce the
@@ -87,7 +89,7 @@ protected:
   Real _qp_factor;
 
   /// Whether to normalize weighted gap by weighting function norm
-  bool _normalize_c;
+  const bool _normalize_c;
 
   /// Whether the dof objects are nodal; if they're not, then they're elemental
   const bool _nodal;
@@ -102,10 +104,10 @@ protected:
   /// Vector for computation of weighted gap with nodal normals
   ADRealVectorValue _qp_gap_nodal;
 
-  /// A map from node to weighted gap and normalization (if requested)
-  std::unordered_map<const DofObject *, std::pair<ADReal, Real>> _dof_to_weighted_gap;
-
   /// A pointer members that can be used to help avoid copying ADReals
   const ADReal * _weighted_gap_ptr = nullptr;
   const Real * _normalization_ptr = nullptr;
+
+  /// The weighted gap user object
+  const WeightedGapUserObject & _weighted_gap_uo;
 };

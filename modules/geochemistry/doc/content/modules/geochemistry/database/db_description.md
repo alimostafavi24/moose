@@ -10,7 +10,7 @@ making it easy to parse in a variety of applications or languages.
 A python utility The module contains a python utility that translates between the MOOSE format and other formats such as EQ3/6 or [GWB](gwb_database.md). A database in either of these formats can be translated to a MOOSE JSON database using
 
 ```
-geochemistry/python/database_converter.py -i gwb_database --format gwb -o moose_database.json
+geochemistry/python/moose_geochemistry/database_converter.py -i gwb_database --format gwb -o moose_database.json
 ```
 
 for example. Using the supplied python conversion utility ensures that the database produced adheres to the required
@@ -19,7 +19,7 @@ format.
 A full list of the functionality can be obtained using the `--help` flag
 
 ```
-geochemistry/python/database_converter.py --help
+geochemistry/python/moose_geochemistry/database_converter.py --help
 usage: database_converter.py [-h] -i INPUT --format {gwb,eq36} [-o OUTPUT]
 
 Utility to read data from thermodynamic database and write to MOOSE
@@ -83,7 +83,7 @@ The `Header` field must include information about the temperatures and pressures
 
 The temperatures are in $^{\circ}$C, and the pressures --- in bars (1 bar $= 10^{5}\,$Pa) --- lie along the steam saturation curve at the temperatures defined above.
 
-The [activity](activity_coefficients.md) and [fugactity](fugacity.md) models must be defined in the `Header`, along with the appropriate coefficients (at the temperatures specified above):
+The [activity](activity_coefficients.md) and [fugacity](fugacity.md) models must be defined in the `Header`, along with the appropriate coefficients (at the temperatures specified above):
 
 ```
 "Header": {
@@ -490,7 +490,7 @@ database using the following python code
 
 ```python
 import json
-import dbutils
+from moose_geochemistry import dbutils
 
 # Read the database
 with open('geochemistry/database/moose_thermo.json', 'r') as dbfile:
@@ -524,7 +524,7 @@ Species information can be easily extracted
 
 ```python
 import json
-import dbutils
+from moose_geochemistry import dbutils
 
 # Read the database
 with open('geochemistry/database/moose_thermo.json', 'r') as dbfile:
@@ -545,4 +545,4 @@ Calcite:
   logk:  ['2.0683', '1.7130', '1.2133', '.6871', '.0762', '-.5349', '-1.2301', '-2.2107']
 ```
 
-Additional utility functions to print reactions as formatted strings are also provided, see `python/dbutils.py`.
+Additional utility functions to print reactions as formatted strings are also provided, see `python/moose_geochemistry/dbutils.py`.

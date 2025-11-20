@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -34,8 +34,8 @@
 #ifdef GEOCHEMISTRY_ENABLED
 #include "GeochemistryApp.h"
 #endif
-#ifdef HEAT_CONDUCTION_ENABLED
-#include "HeatConductionApp.h"
+#ifdef HEAT_TRANSFER_ENABLED
+#include "HeatTransferApp.h"
 #endif
 #ifdef LEVEL_SET_ENABLED
 #include "LevelSetApp.h"
@@ -73,14 +73,17 @@
 #ifdef SCALAR_TRANSPORT_ENABLED
 #include "ScalarTransportApp.h"
 #endif
+#ifdef SOLID_MECHANICS_ENABLED
+#include "SolidMechanicsApp.h"
+#endif
 #ifdef SOLID_PROPERTIES_ENABLED
 #include "SolidPropertiesApp.h"
 #endif
 #ifdef STOCHASTIC_TOOLS_ENABLED
 #include "StochasticToolsApp.h"
 #endif
-#ifdef TENSOR_MECHANICS_ENABLED
-#include "TensorMechanicsApp.h"
+#ifdef SUBCHANNEL_ENABLED
+#include "SubChannelApp.h"
 #endif
 #ifdef THERMAL_HYDRAULICS_ENABLED
 #include "ThermalHydraulicsApp.h"
@@ -91,20 +94,6 @@
 #ifdef EXTERNAL_PETSC_SOLVER_ENABLED
 #include "ExternalPetscSolverApp.h"
 #endif
-
-///@{
-/**
- * Dummy methods to clear unused parameter warnings from compiler
- */
-void
-clearUnusedWarnings(Factory & /*factory*/)
-{
-}
-void
-clearUnusedWarnings(Syntax & /*syntax*/, ActionFactory & /*action_factory*/)
-{
-}
-///@}
 
 InputParameters
 ModulesApp::validParams()
@@ -124,280 +113,119 @@ void
 ModulesApp::registerApps()
 {
   registerApp(ModulesApp);
-}
 
-void
-ModulesApp::registerObjects(Factory & factory)
-{
-  mooseDeprecated("use ModulesApp::registerAll instead of ModulesApp::registerObjects");
 #ifdef CHEMICAL_REACTIONS_ENABLED
-  ChemicalReactionsApp::registerObjects(factory);
+  ChemicalReactionsApp::registerApps();
 #endif
 
 #ifdef CONTACT_ENABLED
-  ContactApp::registerObjects(factory);
+  ContactApp::registerApps();
 #endif
 
 #ifdef ELECTROMAGNETICS_ENABLED
-  ElectromagneticsApp::registerObjects(factory);
+  ElectromagneticsApp::registerApps();
+#endif
+
+#ifdef FSI_ENABLED
+  FsiApp::registerApps();
 #endif
 
 #ifdef FLUID_PROPERTIES_ENABLED
-  FluidPropertiesApp::registerObjects(factory);
+  FluidPropertiesApp::registerApps();
 #endif
 
 #ifdef FUNCTIONAL_EXPANSION_TOOLS_ENABLED
-  FunctionalExpansionToolsApp::registerObjects(factory);
+  FunctionalExpansionToolsApp::registerApps();
 #endif
 
-#ifdef HEAT_CONDUCTION_ENABLED
-  HeatConductionApp::registerObjects(factory);
+#ifdef GEOCHEMISTRY_ENABLED
+  GeochemistryApp::registerApps();
 #endif
 
-#ifdef LEVEL_SET_ENABLED
-  LevelSetApp::registerObjects(factory);
-#endif
-
-#ifdef MISC_ENABLED
-  MiscApp::registerObjects(factory);
-#endif
-
-#ifdef NAVIER_STOKES_ENABLED
-  NavierStokesApp::registerObjects(factory);
-#endif
-
-#ifdef PERIDYNAMICS_ENABLED
-  PeridynamicsApp::registerObjects(factory);
-#endif
-
-#ifdef PHASE_FIELD_ENABLED
-  PhaseFieldApp::registerObjects(factory);
-#endif
-
-#ifdef POROUS_FLOW_ENABLED
-  PorousFlowApp::registerObjects(factory);
-#endif
-
-#ifdef RAY_TRACING_ENABLED
-  RayTracingApp::registerObjects(factory);
-#endif
-
-#ifdef RDG_ENABLED
-  RdgApp::registerObjects(factory);
-#endif
-
-#ifdef REACTOR_ENABLED
-  ReactorApp::registerObjects(factory);
-#endif
-
-#ifdef RICHARDS_ENABLED
-  RichardsApp::registerObjects(factory);
-#endif
-
-#ifdef SOLID_PROPERTIES_ENABLED
-  SolidPropertiesApp::registerObjects(factory);
-#endif
-
-#ifdef STOCHASTIC_TOOLS_ENABLED
-  StochasticToolsApp::registerObjects(factory);
-#endif
-
-#ifdef TENSOR_MECHANICS_ENABLED
-  TensorMechanicsApp::registerObjects(factory);
-#endif
-
-#ifdef THERMAL_HYDRAULICS_ENABLED
-  ThermalHydraulicsApp::registerObjects(factory);
-#endif
-
-#ifdef XFEM_ENABLED
-  XFEMApp::registerObjects(factory);
-#endif
-
-  clearUnusedWarnings(factory);
-}
-
-void
-ModulesApp::associateSyntax(Syntax & syntax, ActionFactory & action_factory)
-{
-  mooseDeprecated("use ModulesApp::registerAll instead of ModulesApp::associateSyntax");
-#ifdef CHEMICAL_REACTIONS_ENABLED
-  ChemicalReactionsApp::associateSyntax(syntax, action_factory);
-#endif
-
-#ifdef CONTACT_ENABLED
-  ContactApp::associateSyntax(syntax, action_factory);
-#endif
-
-#ifdef ELECTROMAGNETICS_ENABLED
-  ElectromagneticsApp::associateSyntax(syntax, action_factory);
-#endif
-
-#ifdef FLUID_PROPERTIES_ENABLED
-  FluidPropertiesApp::associateSyntax(syntax, action_factory);
-#endif
-
-#ifdef FUNCTIONAL_EXPANSION_TOOLS_ENABLED
-  FunctionalExpansionToolsApp::associateSyntax(syntax, action_factory);
-#endif
-
-#ifdef HEAT_CONDUCTION_ENABLED
-  HeatConductionApp::associateSyntax(syntax, action_factory);
+#ifdef HEAT_TRANSFER_ENABLED
+  HeatTransferApp::registerApps();
 #endif
 
 #ifdef LEVEL_SET_ENABLED
-  LevelSetApp::associateSyntax(syntax, action_factory);
+  LevelSetApp::registerApps();
 #endif
 
 #ifdef MISC_ENABLED
-  MiscApp::associateSyntax(syntax, action_factory);
+  MiscApp::registerApps();
 #endif
 
 #ifdef NAVIER_STOKES_ENABLED
-  NavierStokesApp::associateSyntax(syntax, action_factory);
+  NavierStokesApp::registerApps();
+#endif
+
+#ifdef OPTIMIZATION_ENABLED
+  OptimizationApp::registerApps();
 #endif
 
 #ifdef PERIDYNAMICS_ENABLED
-  PeridynamicsApp::associateSyntax(syntax, action_factory);
+  PeridynamicsApp::registerApps();
 #endif
 
 #ifdef PHASE_FIELD_ENABLED
-  PhaseFieldApp::associateSyntax(syntax, action_factory);
+  PhaseFieldApp::registerApps();
 #endif
 
 #ifdef POROUS_FLOW_ENABLED
-  PorousFlowApp::associateSyntax(syntax, action_factory);
+  PorousFlowApp::registerApps();
 #endif
 
 #ifdef RAY_TRACING_ENABLED
-  RayTracingApp::associateSyntax(syntax, action_factory);
+  RayTracingApp::registerApps();
 #endif
 
 #ifdef RDG_ENABLED
-  RdgApp::associateSyntax(syntax, action_factory);
+  RdgApp::registerApps();
 #endif
 
 #ifdef REACTOR_ENABLED
-  ReactorApp::associateSyntax(syntax, action_factory);
+  ReactorApp::registerApps();
 #endif
 
 #ifdef RICHARDS_ENABLED
-  RichardsApp::associateSyntax(syntax, action_factory);
+  RichardsApp::registerApps();
+#endif
+
+#ifdef SCALAR_TRANSPORT_ENABLED
+  ScalarTransportApp::registerApps();
+#endif
+
+#ifdef SOLID_MECHANICS_ENABLED
+  SolidMechanicsApp::registerApps();
 #endif
 
 #ifdef SOLID_PROPERTIES_ENABLED
-  SolidPropertiesApp::associateSyntax(syntax, action_factory);
+  SolidPropertiesApp::registerApps();
 #endif
 
 #ifdef STOCHASTIC_TOOLS_ENABLED
-  StochasticToolsApp::associateSyntax(syntax, action_factory);
+  StochasticToolsApp::registerApps();
 #endif
 
-#ifdef TENSOR_MECHANICS_ENABLED
-  TensorMechanicsApp::associateSyntax(syntax, action_factory);
-#endif
-
-#ifdef THERMAL_HYDRAULICS_ENABLED
-  ThermalHydraulicsApp::associateSyntax(syntax, action_factory);
-#endif
-
-#ifdef XFEM_ENABLED
-  XFEMApp::associateSyntax(syntax, action_factory);
-#endif
-
-  clearUnusedWarnings(syntax, action_factory);
-}
-
-void
-ModulesApp::registerExecFlags(Factory & factory)
-{
-  mooseDeprecated("Do not use registerExecFlags, apps no longer require flag registration");
-#ifdef CHEMICAL_REACTIONS_ENABLED
-  ChemicalReactionsApp::registerExecFlags(factory);
-#endif
-
-#ifdef CONTACT_ENABLED
-  ContactApp::registerExecFlags(factory);
-#endif
-
-#ifdef ELECTROMAGNETICS_ENABLED
-  ElectromagneticsApp::registerExecFlags(factory);
-#endif
-
-#ifdef FLUID_PROPERTIES_ENABLED
-  FluidPropertiesApp::registerExecFlags(factory);
-#endif
-
-#ifdef HEAT_CONDUCTION_ENABLED
-  HeatConductionApp::registerExecFlags(factory);
-#endif
-
-#ifdef LEVEL_SET_ENABLED
-  LevelSetApp::registerExecFlags(factory);
-#endif
-
-#ifdef MISC_ENABLED
-  MiscApp::registerExecFlags(factory);
-#endif
-
-#ifdef NAVIER_STOKES_ENABLED
-  NavierStokesApp::registerExecFlags(factory);
-#endif
-
-#ifdef PERIDYNAMICS_ENABLED
-  PeridynamicsApp::registerExecFlags(factory);
-#endif
-
-#ifdef PHASE_FIELD_ENABLED
-  PhaseFieldApp::registerExecFlags(factory);
-#endif
-
-#ifdef POROUS_FLOW_ENABLED
-  PorousFlowApp::registerExecFlags(factory);
-#endif
-
-#ifdef RAY_TRACING_ENABLED
-  RayTracingApp::registerExecFlags(factory);
-#endif
-
-#ifdef RDG_ENABLED
-  RdgApp::registerExecFlags(factory);
-#endif
-
-#ifdef REACTOR_ENABLED
-  ReactorApp::registerExecFlags(factory);
-#endif
-
-#ifdef RICHARDS_ENABLED
-  RichardsApp::registerExecFlags(factory);
-#endif
-
-#ifdef SOLID_PROPERTIES_ENABLED
-  SolidPropertiesApp::registerExecFlags(factory);
-#endif
-
-#ifdef STOCHASTIC_TOOLS_ENABLED
-  StochasticToolsApp::registerExecFlags(factory);
-#endif
-
-#ifdef TENSOR_MECHANICS_ENABLED
-  TensorMechanicsApp::registerExecFlags(factory);
+#ifdef SUBCHANNEL_ENABLED
+  SubChannelApp::registerApps();
 #endif
 
 #ifdef THERMAL_HYDRAULICS_ENABLED
-  ThermalHydraulicsApp::registerExecFlags(factory);
+  ThermalHydraulicsApp::registerApps();
 #endif
 
 #ifdef XFEM_ENABLED
-  XFEMApp::registerExecFlags(factory);
+  XFEMApp::registerApps();
 #endif
-
-  clearUnusedWarnings(factory);
 }
 
 void
 ModulesApp::registerAll(Factory & f, ActionFactory & af, Syntax & s)
 {
+  ::mooseDeprecated(
+      "\"registerAll\" in Modules is deprecated. Please update your *App.C file(s) to call the new "
+      "templated \"registerAllObjects\" method (e.g. ModulesApp::registerAllObjects<MyApp>(...))");
+
 #ifdef CHEMICAL_REACTIONS_ENABLED
   ChemicalReactionsApp::registerAll(f, af, s);
 #endif
@@ -418,12 +246,16 @@ ModulesApp::registerAll(Factory & f, ActionFactory & af, Syntax & s)
   FsiApp::registerAll(f, af, s);
 #endif
 
+#ifdef FUNCTIONAL_EXPANSION_TOOLS_ENABLED
+  FunctionalExpansionToolsApp::registerAll(f, af, s);
+#endif
+
 #ifdef GEOCHEMISTRY_ENABLED
   GeochemistryApp::registerAll(f, af, s);
 #endif
 
-#ifdef HEAT_CONDUCTION_ENABLED
-  HeatConductionApp::registerAll(f, af, s);
+#ifdef HEAT_TRANSFER_ENABLED
+  HeatTransferApp::registerAll(f, af, s);
 #endif
 
 #ifdef LEVEL_SET_ENABLED
@@ -474,6 +306,10 @@ ModulesApp::registerAll(Factory & f, ActionFactory & af, Syntax & s)
   ScalarTransportApp::registerAll(f, af, s);
 #endif
 
+#ifdef SOLID_MECHANICS_ENABLED
+  SolidMechanicsApp::registerAll(f, af, s);
+#endif
+
 #ifdef SOLID_PROPERTIES_ENABLED
   SolidPropertiesApp::registerAll(f, af, s);
 #endif
@@ -482,8 +318,8 @@ ModulesApp::registerAll(Factory & f, ActionFactory & af, Syntax & s)
   StochasticToolsApp::registerAll(f, af, s);
 #endif
 
-#ifdef TENSOR_MECHANICS_ENABLED
-  TensorMechanicsApp::registerAll(f, af, s);
+#ifdef SUBCHANNEL_ENABLED
+  SubChannelApp::registerAll(f, af, s);
 #endif
 
 #ifdef THERMAL_HYDRAULICS_ENABLED
@@ -498,8 +334,7 @@ ModulesApp::registerAll(Factory & f, ActionFactory & af, Syntax & s)
   ExternalPetscSolverApp::registerAll(f, af, s);
 #endif
 
-  clearUnusedWarnings(f);
-  clearUnusedWarnings(s, af);
+  libmesh_ignore(f, s, af);
 }
 
 extern "C" void

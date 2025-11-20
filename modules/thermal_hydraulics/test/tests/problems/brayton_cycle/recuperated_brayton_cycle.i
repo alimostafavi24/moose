@@ -152,9 +152,9 @@ hs_power = 105750
   []
 []
 
-[HeatStructureMaterials]
+[SolidProperties]
   [steel]
-    type = SolidMaterialProperties
+    type = ThermalFunctionSolidProperties
     rho = 8050
     k = 45
     cp = 466
@@ -204,6 +204,10 @@ hs_power = 105750
     expression = 'if(PID_trip_status = 1, max(2.4 - (2.4 * ((t - time_trip) / 35000)),0.0), 1)'
   []
 
+  [motor_torque_fn]
+    type = ConstantFunction
+    value = 0 # controlled
+  []
   # Generates motor power curve
   [motor_power_fn]
     type = ParsedFunction
@@ -472,9 +476,9 @@ hs_power = 105750
     n_elems = ${fparse n_elems3/2}
     n_part_elems = 2
     names = recuperator
-    materials = steel
+    solid_properties = steel
+    solid_properties_T_ref = '300'
     inner_radius = ${D1}
-    offset_mesh_by_inner_radius = true
   []
   # heat transfer from recuperator to cold leg
   [heat_transfer_cold_leg]
@@ -533,7 +537,8 @@ hs_power = 105750
     n_elems = ${n_elems4}
     n_part_elems = 2
     names = core
-    materials = steel
+    solid_properties = steel
+    solid_properties_T_ref = '300'
   []
   [total_power]
     type = TotalPower
@@ -712,9 +717,8 @@ hs_power = 105750
 
   # Takes the output generated in [logic] and applies it to the motor torque
   [motor_PID]
-    type = SetComponentRealValueControl
-    component = motor
-    parameter = torque
+    type = SetRealValueControl
+    parameter = Functions/motor_torque_fn/value
     value = logic:value
   []
   # Determines when to turn on heat source
@@ -803,9 +807,9 @@ hs_power = 105750
   ##########################
 
   [motor_torque]
-    type = RealComponentParameterValuePostprocessor
-    component = motor
-    parameter = torque
+    type = ShaftConnectedComponentPostprocessor
+    quantity = torque
+    shaft_connected_component_uo = motor:shaftconnected_uo
     execute_on = 'INITIAL TIMESTEP_END'
   []
   [motor_power]
@@ -844,7 +848,7 @@ hs_power = 105750
   [shaft_RPM]
     type = ParsedPostprocessor
     pp_names = 'shaft_speed'
-    function = '(shaft_speed * 60) /( 2 * ${fparse pi})'
+    expression = '(shaft_speed * 60) /( 2 * ${fparse pi})'
     execute_on = 'INITIAL TIMESTEP_END'
   []
 
@@ -852,24 +856,27 @@ hs_power = 105750
   # Compressor
   ##########################
   [comp_dissipation_torque]
-    type = ScalarVariable
-    variable = 'compressor:dissipation_torque'
+    type = ElementAverageValue
+    variable = dissipation_torque
+    block = 'compressor'
     execute_on = 'INITIAL TIMESTEP_END'
   []
   [comp_isentropic_torque]
-    type = ScalarVariable
-    variable = 'compressor:isentropic_torque'
+    type = ElementAverageValue
+    variable = isentropic_torque
+    block = 'compressor'
     execute_on = 'INITIAL TIMESTEP_END'
   []
   [comp_friction_torque]
-    type = ScalarVariable
-    variable = 'compressor:friction_torque'
+    type = ElementAverageValue
+    variable = friction_torque
+    block = 'compressor'
     execute_on = 'INITIAL TIMESTEP_END'
   []
   [compressor_torque]
     type = ParsedPostprocessor
     pp_names = 'comp_dissipation_torque comp_isentropic_torque comp_friction_torque'
-    function = 'comp_dissipation_torque + comp_isentropic_torque + comp_friction_torque'
+    expression = 'comp_dissipation_torque + comp_isentropic_torque + comp_friction_torque'
   []
   [p_in_comp]
     type = PointValue
@@ -886,7 +893,7 @@ hs_power = 105750
   [p_ratio_comp]
     type = ParsedPostprocessor
     pp_names = 'p_in_comp p_out_comp'
-    function = 'p_out_comp / p_in_comp'
+    expression = 'p_out_comp / p_in_comp'
     execute_on = 'INITIAL TIMESTEP_END'
   []
   [T_in_comp]
@@ -904,7 +911,7 @@ hs_power = 105750
   [T_ratio_comp]
     type = ParsedPostprocessor
     pp_names = 'T_in_comp T_out_comp'
-    function = '(T_out_comp - T_in_comp) / T_out_comp'
+    expression = '(T_out_comp - T_in_comp) / T_out_comp'
     execute_on = 'INITIAL TIMESTEP_END'
   []
   [mfr_comp]
@@ -920,24 +927,27 @@ hs_power = 105750
   ##########################
 
   [turb_dissipation_torque]
-    type = ScalarVariable
-    variable = 'turbine:dissipation_torque'
+    type = ElementAverageValue
+    variable = dissipation_torque
+    block = 'turbine'
     execute_on = 'INITIAL TIMESTEP_END'
   []
   [turb_isentropic_torque]
-    type = ScalarVariable
-    variable = 'turbine:isentropic_torque'
+    type = ElementAverageValue
+    variable = isentropic_torque
+    block = 'turbine'
     execute_on = 'INITIAL TIMESTEP_END'
   []
   [turb_friction_torque]
-    type = ScalarVariable
-    variable = 'turbine:friction_torque'
+    type = ElementAverageValue
+    variable = friction_torque
+    block = 'turbine'
     execute_on = 'INITIAL TIMESTEP_END'
   []
   [turbine_torque]
     type = ParsedPostprocessor
     pp_names = 'turb_dissipation_torque turb_isentropic_torque turb_friction_torque'
-    function = 'turb_dissipation_torque + turb_isentropic_torque + turb_friction_torque'
+    expression = 'turb_dissipation_torque + turb_isentropic_torque + turb_friction_torque'
   []
   [p_in_turb]
     type = PointValue
@@ -954,7 +964,7 @@ hs_power = 105750
   [p_ratio_turb]
     type = ParsedPostprocessor
     pp_names = 'p_in_turb p_out_turb'
-    function = 'p_in_turb / p_out_turb'
+    expression = 'p_in_turb / p_out_turb'
     execute_on = 'INITIAL TIMESTEP_END'
   []
   [T_in_turb]
@@ -1064,6 +1074,6 @@ hs_power = 105750
   []
   [console]
     type = Console
-    show = 'shaft_speed p_ratio_comp p_ratio_turb compressor:pressure_ratio turbine:pressure_ratio'
+    show = 'shaft_speed p_ratio_comp p_ratio_turb'
   []
 []

@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -23,10 +23,10 @@ BreakMeshByBlockGenerator::validParams()
 {
   InputParameters params = BreakMeshByBlockGeneratorBase::validParams();
   params.addRequiredParam<MeshGeneratorName>("input", "The mesh we want to modify");
-  params.addClassDescription("Break boundaries based on the subdomains to which their sides are "
-                             "attached. Naming convention for the new boundaries will be the old "
-                             "boundary name plus \"_to_\" plus the subdomain name. At the moment"
-                             "this only works on REPLICATED mesh");
+  params.addClassDescription(
+      "Break the mesh at interfaces between blocks. New nodes will be generated so elements on "
+      "each side of the break are no longer connected. At the moment, this only works on a "
+      "REPLICATED mesh");
   params.addParam<std::vector<SubdomainName>>(
       "surrounding_blocks",
       "The list of subdomain names surrounding which interfaces will be generated.");
@@ -80,6 +80,9 @@ BreakMeshByBlockGenerator::generate()
   std::unique_ptr<MeshBase> mesh = std::move(_input);
   if (!mesh->is_replicated())
     mooseError("BreakMeshByBlockGenerator is not implemented for distributed meshes");
+
+  // Try to trick the rest of the world into thinking we're prepared
+  mesh->prepare_for_use();
 
   BoundaryInfo & boundary_info = mesh->get_boundary_info();
 
@@ -223,7 +226,7 @@ BreakMeshByBlockGenerator::generate()
                   // subdomain elem
                   new_node->processor_id() = current_elem->processor_id();
                   mesh->add_node(new_node);
-                  current_elem->set_node(node_id) = new_node;
+                  current_elem->set_node(node_id, new_node);
                   // Add boundary info to the new node
                   boundary_info.boundary_ids(current_node, node_boundary_ids);
                   boundary_info.add_node(new_node, node_boundary_ids);
@@ -250,7 +253,7 @@ BreakMeshByBlockGenerator::generate()
                     if (connected_elem->node_id(node_id) ==
                         current_node->id()) // if current node == node on element
                     {
-                      connected_elem->set_node(node_id) = new_node;
+                      connected_elem->set_node(node_id, new_node);
                       break;
                     }
                 }
@@ -327,8 +330,8 @@ BreakMeshByBlockGenerator::generate()
         }
 
       } // end multiplicity check
-    }   // end loop over nodes
-  }     // end nodeptr check
+    } // end loop over nodes
+  } // end nodeptr check
 
   addInterfaceBoundary(*mesh);
   Partitioner::set_node_processor_ids(*mesh);

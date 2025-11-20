@@ -35,12 +35,18 @@
     requirement = 'The Jacobian for the solution continuity test case shall be perfect'
     prereq = 'soln-continuity'
   []
+  [soln-continuity-pg]
+    type = 'Exodiff'
+    input = 'soln-continuity-pg.i'
+    exodiff = 'soln-continuity-pg_out.e'
+    requirement = 'We shall be able to produce the expected result for a solution continuity test case using the Petrov-Galerkin approach for mortar.'
+  []
   [sequencing-stateful-soln-continuity]
     type = 'Exodiff'
     input = 'sequencing-stateful-soln-continuity.i'
     exodiff = 'sequencing-stateful-soln-continuity_out.e-s002 sequencing-stateful-soln-continuity_out.e-s003'
     mesh_mode = 'REPLICATED'
-    requirement = 'The system shall be able to prolong and restrict stateful material properties because of mesh adaptivity in the presense of lower dimensional subdomains that do not have materials and when stateful properties are needed on boundaries (because of integrated boundary conditions)'
+    requirement = 'The system shall be able to prolong and restrict stateful material properties because of mesh adaptivity in the presense of lower dimensional subdomains that do not have materials and when stateful properties are needed on boundaries.'
     max_threads = 1 # periodic failure with threads. will need more investigation
   []
   [vcp]

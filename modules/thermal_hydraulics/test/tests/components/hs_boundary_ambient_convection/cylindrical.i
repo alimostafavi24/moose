@@ -20,7 +20,16 @@ A = ${fparse pi * D_o * L}
 heat_flux_avg = ${fparse 0.5 * (htc1 * (T_ambient1 - T_hs) + htc2 * (T_ambient2 - T_hs))}
 heat_flux_integral = ${fparse heat_flux_avg * A}
 scale = 0.8
-E_change = ${fparse scale * heat_flux_integral * t}
+power = ${fparse scale * heat_flux_integral}
+E_change = ${fparse power * t}
+
+[FunctorMaterials]
+  [test_fm]
+    type = ADGenericFunctorMaterial
+    prop_names = 'T_ambient_prop htc_ambient_prop'
+    prop_values = 'T_ambient_fn htc_ambient_fn'
+  []
+[]
 
 [Functions]
   [T_ambient_fn]
@@ -37,9 +46,9 @@ E_change = ${fparse scale * heat_flux_integral * t}
   []
 []
 
-[HeatStructureMaterials]
+[SolidProperties]
   [hs_mat]
-    type = SolidMaterialProperties
+    type = ThermalFunctionSolidProperties
     rho = ${density}
     cp = ${specific_heat_capacity}
     k = ${conductivity}
@@ -57,7 +66,8 @@ E_change = ${fparse scale * heat_flux_integral * t}
     inner_radius = ${R_i}
     widths = '${thickness}'
     n_part_elems = '10'
-    materials = 'hs_mat'
+    solid_properties = 'hs_mat'
+    solid_properties_T_ref = '300'
     names = 'region'
 
     initial_T = ${T_hs}
@@ -67,18 +77,13 @@ E_change = ${fparse scale * heat_flux_integral * t}
     type = HSBoundaryAmbientConvection
     boundary = 'hs:outer'
     hs = hs
-    T_ambient = T_ambient_fn
-    htc_ambient = htc_ambient_fn
-    scale_pp = bc_scale_pp
+    T_ambient = T_ambient_prop
+    htc_ambient = htc_ambient_prop
+    scale = ${scale}
   []
 []
 
 [Postprocessors]
-  [bc_scale_pp]
-    type = FunctionValuePostprocessor
-    function = ${scale}
-    execute_on = 'INITIAL TIMESTEP_END'
-  []
   [E_hs]
     type = ADHeatStructureEnergyRZ
     block = 'hs:region'
@@ -97,6 +102,13 @@ E_change = ${fparse scale * heat_flux_integral * t}
     value2 = ${E_change}
     execute_on = 'INITIAL TIMESTEP_END'
   []
+
+  [heat_rate_pp_relerr]
+    type = RelativeDifferencePostprocessor
+    value1 = ambient_convection_integral
+    value2 = ${power}
+    execute_on = 'INITIAL'
+  []
 []
 
 [Executioner]
@@ -114,7 +126,7 @@ E_change = ${fparse scale * heat_flux_integral * t}
 [Outputs]
   [out]
     type = CSV
-    show = 'E_change_relerr'
+    show = 'E_change_relerr heat_rate_pp_relerr'
     execute_on = 'FINAL'
   []
 []

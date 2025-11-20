@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -16,6 +16,8 @@
 #include "libmesh/dense_matrix.h"
 #include "libmesh/elem.h"
 #include "libmesh/point.h"
+
+using namespace libMesh;
 
 namespace Moose
 {
@@ -40,7 +42,7 @@ outer_product(const TypeVector<T> & a, const TypeVector<T2> & b)
 
 template <typename T, typename Map>
 typename FaceCenteredMapFunctor<T, Map>::ValueType
-FaceCenteredMapFunctor<T, Map>::evaluate(const ElemArg & elem_arg, unsigned int) const
+FaceCenteredMapFunctor<T, Map>::evaluate(const ElemArg & elem_arg, const StateArg &) const
 {
   // The following reconstruction is based on Weller's method. For more information on this,
   // we recommend:
@@ -115,12 +117,16 @@ FaceCenteredMapFunctor<T, Map>::evaluate(const ElemArg & elem_arg, unsigned int)
     return result;
   }
   else
+  {
+    (void)elem_arg; // WE do this because the GCC min complains that it is not used and
+                    // [[maybe_unused]] doesnt work for GCC min
     mooseError("Cell center reconstruction is not implemented!");
+  }
 }
 
 template <typename T, typename Map>
 typename FaceCenteredMapFunctor<T, Map>::ValueType
-FaceCenteredMapFunctor<T, Map>::evaluate(const FaceArg & face, unsigned int) const
+FaceCenteredMapFunctor<T, Map>::evaluate(const FaceArg & face, const StateArg &) const
 {
   return this->evaluate(face.fi);
 }
@@ -129,11 +135,8 @@ template <typename T, typename Map>
 typename FaceCenteredMapFunctor<T, Map>::ValueType
 FaceCenteredMapFunctor<T, Map>::evaluate(const FaceInfo * fi) const
 {
-  try
-  {
-    return libmesh_map_find(*this, fi->id());
-  }
-  catch (libMesh::LogicError &)
+  auto it = this->find(fi->id());
+  if (it == this->end())
   {
     if (!_sub_ids.empty() && !_sub_ids.count(fi->elem().subdomain_id()))
     {
@@ -156,9 +159,12 @@ FaceCenteredMapFunctor<T, Map>::evaluate(const FaceInfo * fi) const
 
     return typename FaceCenteredMapFunctor<T, Map>::ValueType();
   }
+
+  return it->second;
 }
 
 template class FaceCenteredMapFunctor<ADRealVectorValue,
                                       std::unordered_map<dof_id_type, ADRealVectorValue>>;
 template class FaceCenteredMapFunctor<RealVectorValue,
                                       std::unordered_map<dof_id_type, RealVectorValue>>;
+template class FaceCenteredMapFunctor<Real, std::unordered_map<dof_id_type, Real>>;

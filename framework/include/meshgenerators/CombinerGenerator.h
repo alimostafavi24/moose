@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -29,11 +29,6 @@ public:
   void fillPositions();
 
 protected:
-  /**
-   * Helper funciton for copying one mesh into another
-   */
-  void copyIntoMesh(UnstructuredMesh & destination, const UnstructuredMesh & source);
-
   // Holds pointers to the mesh smart pointers (to be populated later).
   const std::vector<std::unique_ptr<MeshBase> *> _meshes;
 
@@ -42,4 +37,9 @@ protected:
 
   /// The (offsets) positions for each mesh
   std::vector<Point> _positions;
+
+  /// Boolean to control whether to prevent merging subdomains
+  const bool _avoid_merging_subdomains;
+  /// Boolean to control whether to prevent merging boundaries
+  const bool _avoid_merging_boundaries;
 };

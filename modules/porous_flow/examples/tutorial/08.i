@@ -34,7 +34,7 @@
   [injection_area]
     type = ParsedGenerateSideset
     combinatorial_geometry = 'x*x+y*y<1.01'
-    included_subdomain_ids = 1
+    included_subdomains = 1
     new_sideset_name = 'injection_area'
     input = 'aquifer'
   []
@@ -126,7 +126,8 @@
   solve_type = Newton
   end_time = 1E6
   dt = 1E5
-  nl_abs_tol = 1E-7
+  nl_abs_tol = 1E-12
+  nl_rel_tol = 1e-12
 []
 
 [Outputs]

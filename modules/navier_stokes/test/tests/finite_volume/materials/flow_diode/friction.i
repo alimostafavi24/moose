@@ -47,14 +47,14 @@ rho = 10
 
     inlet_boundaries = 'left'
     momentum_inlet_types = 'fixed-velocity'
-    momentum_inlet_function = '1 0'
+    momentum_inlet_functors = '1 0'
 
     wall_boundaries = 'top bottom'
     momentum_wall_types = 'noslip noslip'
 
     outlet_boundaries = 'right'
     momentum_outlet_types = 'fixed-pressure'
-    pressure_function = '1'
+    pressure_functors = '1'
 
     use_friction_correction = true
     consistent_scaling = 10
@@ -64,10 +64,14 @@ rho = 10
     # friction_coeffs = 'Darcy Forchheimer; Darcy Forchheimer'
     # Combined with diode
     friction_coeffs = 'combined_linear combined_quadratic; combined_linear combined_quadratic'
+    standard_friction_formulation = true
+
+    mass_advection_interpolation = 'average'
+    momentum_advection_interpolation = 'average'
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [porosity]
     type = ADGenericFunctorMaterial
     prop_names = 'porosity'
@@ -76,13 +80,13 @@ rho = 10
   [base_friction]
     type = ADGenericVectorFunctorMaterial
     prop_names = 'Darcy Forchheimer'
-    prop_values = '1 1 1 0.1 0.2 0.3'
+    prop_values = '220 240 260 0 0 0'
   []
   [diode]
-    type = NSFVFrictionFlowDiodeMaterial
+    type = NSFVFrictionFlowDiodeFunctorMaterial
     direction = '1 0 0'
-    additional_linear_resistance = '10 0 0' #'100 10 20'
-    additional_quadratic_resistance = '10 0 0' #'10 4 4'
+    additional_linear_resistance = '4000 0 0'
+    additional_quadratic_resistance = '0 0 0'
     base_linear_friction_coefs = 'Darcy'
     base_quadratic_friction_coefs = 'Forchheimer'
     sum_linear_friction_name = 'diode_linear'

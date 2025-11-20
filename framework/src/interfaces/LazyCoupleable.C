@@ -1,5 +1,5 @@
 //* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
+//* https://mooseframework.inl.gov
 //*
 //* All rights reserved, see COPYRIGHT for full restrictions
 //* https://github.com/idaholab/moose/blob/master/COPYRIGHT
@@ -19,7 +19,7 @@
 
 LazyCoupleable::LazyCoupleable(const MooseObject * moose_object)
   : _l_parameters(moose_object->parameters()),
-    _l_name(_l_parameters.get<std::string>("_object_name")),
+    _l_name(moose_object->name()),
     _l_fe_problem(nullptr),
     _l_app(moose_object->getMooseApp())
 {
@@ -45,7 +45,7 @@ LazyCoupleable::init()
 
     auto & moose_var = _l_fe_problem->getVariable(
         0, var_pair.first, Moose::VarKindType::VAR_ANY, Moose::VarFieldType::VAR_FIELD_ANY);
-    if (moose_var.kind() == Moose::VAR_NONLINEAR)
+    if (moose_var.kind() == Moose::VAR_SOLVER)
       *(var_pair.second) = moose_var.number();
     else
       *(var_pair.second) = std::numeric_limits<unsigned int>::max() - moose_var.number();
